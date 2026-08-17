@@ -1,0 +1,170 @@
+/* SENCE RCE SaaS Frontend Styles */
+.sence-rce-card {
+    background: #ffffff;
+    border-radius: 10px;
+    box-shadow: 0 4px 15px rgba(0, 0, 0, 0.05);
+    border: 1px solid #e2e8f0;
+    padding: 24px;
+    margin: 20px 0;
+    box-sizing: border-box;
+    font-family: inherit;
+}
+
+.sence-rce-header {
+    border-bottom: 2px solid #f1f5f9;
+    padding-bottom: 12px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+}
+
+.sence-rce-header h4 {
+    margin: 0;
+    font-size: 18px;
+    color: #003f87;
+    font-weight: 700;
+}
+
+.sence-rce-student-info {
+    background: #f8fafc;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    font-size: 14px;
+}
+
+.sence-rce-btn {
+    display: block;
+    width: 100%;
+    padding: 14px 20px;
+    border-radius: 8px;
+    font-size: 16px;
+    font-weight: 700;
+    text-align: center;
+    cursor: pointer;
+    border: none;
+    transition: all 0.2s ease;
+    box-sizing: border-box;
+    text-decoration: none;
+}
+
+.sence-rce-btn-primary {
+    background: #003f87;
+    color: #ffffff;
+}
+
+.sence-rce-btn-primary:hover {
+    background: #002c5f;
+    color: #ffffff;
+}
+
+.sence-rce-btn-danger {
+    background: #dc2626;
+    color: #ffffff;
+}
+
+.sence-rce-btn-danger:hover {
+    background: #b91c1c;
+    color: #ffffff;
+}
+
+.sence-rce-btn-secondary {
+    background: #475569;
+    color: #ffffff;
+}
+
+.sence-rce-links {
+    margin-top: 14px;
+    text-align: center;
+    font-size: 13px;
+}
+
+.sence-rce-links a {
+    color: #003f87;
+    text-decoration: underline;
+}
+
+/* Timer */
+.sence-rce-timer-container {
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    border-radius: 8px;
+    padding: 16px;
+    text-align: center;
+    margin-bottom: 16px;
+}
+
+.timer-label {
+    display: block;
+    font-size: 12px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: #166534;
+    font-weight: 600;
+    margin-bottom: 4px;
+}
+
+.timer-display {
+    font-size: 28px;
+    font-weight: 800;
+    color: #15803d;
+    font-family: monospace;
+}
+
+.sence-rce-timer-warning {
+    background: #fef2f2;
+    border: 1px solid #fecaca;
+    color: #991b1b;
+    padding: 10px 14px;
+    border-radius: 6px;
+    margin-bottom: 16px;
+    font-size: 13px;
+    font-weight: 600;
+    text-align: center;
+}
+
+.sence-rce-dot {
+    display: inline-block;
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #94a3b8;
+    margin-right: 8px;
+}
+
+.sence-rce-dot.active {
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+}
+
+/* Notices */
+.sence-rce-notice {
+    padding: 14px 18px;
+    border-radius: 8px;
+    margin: 16px 0;
+    font-size: 14px;
+}
+
+.sence-rce-notice.success { background: #dcfce7; border-left: 4px solid #16a34a; color: #166534; }
+.sence-rce-notice.danger  { background: #fee2e2; border-left: 4px solid #dc2626; color: #991b1b; }
+.sence-rce-notice.info    { background: #e0f2fe; border-left: 4px solid #0284c7; color: #075985; }
+
+/* Lock Screen */
+.sence-rce-lock-container {
+    background: #f8fafc;
+    border: 2px dashed #cbd5e1;
+    border-radius: 12px;
+    padding: 40px 20px;
+    text-align: center;
+    margin: 30px 0;
+}
+
+.sence-rce-lock-box {
+    max-width: 540px;
+    margin: 0 auto;
+}
+
+.lock-icon {
+    font-size: 48px;
+    margin-bottom: 12px;
+}
