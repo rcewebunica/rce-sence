@@ -95,15 +95,23 @@ class Sence_RCE_Admin_Menu {
 
     public function render_dashboard() {
         $stats = $this->api->get_stats();
-        $conn  = $this->api->test_connection();
-        $opts  = get_option( 'sence_rce_cloud_options', array() );
+        if ( is_wp_error( $stats ) || ! is_array( $stats ) ) {
+            $stats = false;
+        }
+
+        $conn = $this->api->test_connection();
+        if ( is_wp_error( $conn ) || ! is_array( $conn ) ) {
+            $conn = array( 'success' => false, 'message' => 'No conectado' );
+        }
+
+        $opts = get_option( 'sence_rce_cloud_options', array() );
         ?>
         <div class="wrap sence-rce-wrap">
             <h1>🇨🇱 SENCE RCE — Panel de Control SaaS</h1>
 
-            <div class="sence-rce-connection-bar <?php echo $conn['success'] ? 'connected' : 'disconnected'; ?>">
+            <div class="sence-rce-connection-bar <?php echo ! empty( $conn['success'] ) ? 'connected' : 'disconnected'; ?>">
                 <span class="status-indicator"></span>
-                <span><strong>Estado Servidor Central:</strong> <?php echo esc_html( $conn['message'] ); ?></span>
+                <span><strong>Estado Servidor Central:</strong> <?php echo esc_html( $conn['message'] ?? 'No conectado' ); ?></span>
                 <?php if ( ! empty( $opts['test_env'] ) ) : ?>
                     <span class="sence-badge warning" style="margin-left:auto;">MODO DE PRUEBA ACTIVO</span>
                 <?php else : ?>
@@ -111,7 +119,7 @@ class Sence_RCE_Admin_Menu {
                 <?php endif; ?>
             </div>
 
-            <?php if ( $stats ) : ?>
+            <?php if ( ! empty( $stats ) ) : ?>
             <div class="sence-rce-stats-grid">
                 <div class="sence-rce-stat-card">
                     <div class="stat-num"><?php echo esc_html( $stats['total_sessions'] ?? 0 ); ?></div>
@@ -356,36 +364,40 @@ class Sence_RCE_Admin_Menu {
 
     public function render_plan() {
         $plan_info = $this->api->get_plan();
-        $current = $plan_info['current_plan'] ?? array();
-        $all = $plan_info['all_plans'] ?? array();
+        if ( is_wp_error( $plan_info ) || ! is_array( $plan_info ) ) {
+            $plan_info = array();
+        }
+
+        $current = isset( $plan_info['current_plan'] ) && is_array( $plan_info['current_plan'] ) ? $plan_info['current_plan'] : array();
+        $all = isset( $plan_info['all_plans'] ) && is_array( $plan_info['all_plans'] ) ? $plan_info['all_plans'] : array();
         ?>
         <div class="wrap sence-rce-wrap">
             <h1>Tu Plan SaaS SENCE RCE</h1>
             <div class="sence-rce-card">
                 <h2>Plan Actual: <span style="color:#0073aa;"><?php echo esc_html( $current['name'] ?? 'Free' ); ?></span></h2>
-                <p>Capacidad máxima de cursos: <strong><?php echo $current['max_courses'] === -1 ? 'Ilimitados' : esc_html( $current['max_courses'] ); ?></strong></p>
-                <p>Límite mensual de sesiones: <strong><?php echo $current['max_sessions_month'] === -1 ? 'Ilimitadas' : esc_html( $current['max_sessions_month'] ); ?></strong></p>
+                <p>Capacidad máxima de cursos: <strong><?php echo ( isset( $current['max_courses'] ) && $current['max_courses'] === -1 ) ? 'Ilimitados' : esc_html( $current['max_courses'] ?? 1 ); ?></strong></p>
+                <p>Límite mensual de sesiones: <strong><?php echo ( isset( $current['max_sessions_month'] ) && $current['max_sessions_month'] === -1 ) ? 'Ilimitadas' : esc_html( $current['max_sessions_month'] ?? 50 ); ?></strong></p>
             </div>
 
             <h2>Planes Disponibles</h2>
             <div class="sence-rce-plans-grid">
-                <?php foreach ( $all as $p ) : ?>
-                <div class="sence-rce-plan-card <?php echo ( $current['id'] ?? '' ) === $p['id'] ? 'current' : ''; ?>">
-                    <h3><?php echo esc_html( $p['name'] ); ?></h3>
-                    <div class="plan-price"><?php echo $p['price_clp'] > 0 ? '$' . number_format( $p['price_clp'], 0, ',', '.' ) . ' CLP/mes' : ( $p['price_clp'] === 0 ? 'Gratis' : 'A convenir' ); ?></div>
+                <?php if ( ! empty( $all ) ) : foreach ( $all as $p ) : ?>
+                <div class="sence-rce-plan-card <?php echo ( $current['id'] ?? '' ) === ( $p['id'] ?? '' ) ? 'current' : ''; ?>">
+                    <h3><?php echo esc_html( $p['name'] ?? 'Plan' ); ?></h3>
+                    <div class="plan-price"><?php echo isset( $p['price_clp'] ) && $p['price_clp'] > 0 ? '$' . number_format( $p['price_clp'], 0, ',', '.' ) . ' CLP/mes' : ( isset( $p['price_clp'] ) && $p['price_clp'] === 0 ? 'Gratis' : 'A convenir' ); ?></div>
                     <ul class="plan-features">
-                        <li>📚 <?php echo $p['max_courses'] === -1 ? 'Cursos ilimitados' : 'Hasta ' . $p['max_courses'] . ' cursos'; ?></li>
-                        <li>👥 <?php echo $p['max_sessions_month'] === -1 ? 'Sesiones ilimitadas' : 'Hasta ' . $p['max_sessions_month'] . ' asistencias/mes'; ?></li>
+                        <li>📚 <?php echo ( isset( $p['max_courses'] ) && $p['max_courses'] === -1 ) ? 'Cursos ilimitados' : 'Hasta ' . ( $p['max_courses'] ?? 1 ) . ' cursos'; ?></li>
+                        <li>👥 <?php echo ( isset( $p['max_sessions_month'] ) && $p['max_sessions_month'] === -1 ) ? 'Sesiones ilimitadas' : 'Hasta ' . ( $p['max_sessions_month'] ?? 50 ) . ' asistencias/mes'; ?></li>
                         <li>🛡️ Clave Única & SENCE RCE</li>
                         <li>📊 Reportes y Exportación CSV</li>
                     </ul>
-                    <?php if ( ( $current['id'] ?? '' ) === $p['id'] ) : ?>
+                    <?php if ( ( $current['id'] ?? '' ) === ( $p['id'] ?? '' ) ) : ?>
                         <span class="button button-disabled">Plan Activo</span>
                     <?php else : ?>
                         <a href="https://webunica.cl/contacto" target="_blank" class="button button-primary">Contactar para Actualizar</a>
                     <?php endif; ?>
                 </div>
-                <?php endforeach; ?>
+                <?php endforeach; endif; ?>
             </div>
         </div>
         <?php

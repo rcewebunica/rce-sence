@@ -88,7 +88,7 @@ class Sence_RCE_Api_Client {
      */
     public function get_stats() {
         $cached = get_transient( 'sence_rce_stats' );
-        if ( false !== $cached ) {
+        if ( false !== $cached && is_array( $cached ) ) {
             return $cached;
         }
 
@@ -98,14 +98,40 @@ class Sence_RCE_Api_Client {
             return $response;
         }
 
-        return false;
+        return array(
+            'total_sessions'      => 0,
+            'active_sessions'     => 0,
+            'sessions_this_month' => 0,
+            'total_courses'       => 0,
+            'plan'                => array( 'name' => 'No Conectado' )
+        );
     }
 
     /**
      * Información del Plan SaaS
      */
     public function get_plan() {
-        return $this->_request( '/api/plan', 'GET' );
+        $response = $this->_request( '/api/plan', 'GET' );
+        if ( ! is_wp_error( $response ) && is_array( $response ) && ! empty( $response['all_plans'] ) ) {
+            return $response;
+        }
+
+        // Catálogo por defecto cuando el servidor aún no está vinculado
+        return array(
+            'current_plan' => array(
+                'id'                 => 'free',
+                'name'               => 'Gratuito (Pendiente vincular servidor)',
+                'max_courses'        => 1,
+                'max_sessions_month' => 50,
+                'price_clp'          => 0
+            ),
+            'all_plans' => array(
+                array( 'id' => 'free', 'name' => 'Gratuito', 'max_courses' => 1, 'max_sessions_month' => 50, 'price_clp' => 0 ),
+                array( 'id' => 'starter', 'name' => 'Starter', 'max_courses' => 5, 'max_sessions_month' => 500, 'price_clp' => 29900 ),
+                array( 'id' => 'pro', 'name' => 'Pro', 'max_courses' => 20, 'max_sessions_month' => 2000, 'price_clp' => 79900 ),
+                array( 'id' => 'enterprise', 'name' => 'Enterprise', 'max_courses' => -1, 'max_sessions_month' => -1, 'price_clp' => -1 )
+            )
+        );
     }
 
     /**
