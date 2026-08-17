@@ -94,13 +94,12 @@ app.use((err, req, res, next) => {
   });
 });
 
-// 10. Iniciar Servidor
+// 10. Iniciar Servidor (Escuchando en 0.0.0.0 para contenedores Docker / Railway)
 if (process.env.NODE_ENV !== 'test') {
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
-    console.log(`🚀 SENCE RCE SaaS Server corriendo en el puerto ${PORT}`);
-    console.log(`📍 Health Check: http://localhost:${PORT}/health`);
-    console.log(`📍 Simulador Mock: http://localhost:${PORT}/mock`);
+    console.log(`🚀 SENCE RCE SaaS Server corriendo en http://0.0.0.0:${PORT}`);
+    console.log(`📍 Health Check: http://0.0.0.0:${PORT}/health`);
     console.log(`=======================================================`);
   });
 }
