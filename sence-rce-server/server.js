@@ -62,12 +62,29 @@ const callbackLimiter = rateLimit({
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 app.use(express.json({ limit: '10mb' }));
 
-// 6. Endpoint de Health Check
-app.get('/health', (req, res) => {
+// 6. Endpoint de Health Check con Diagnóstico de Supabase
+app.get('/health', async (req, res) => {
+  const hasUrl = !!process.env.SUPABASE_URL && !process.env.SUPABASE_URL.includes('placeholder');
+  const hasKey = !!process.env.SUPABASE_SERVICE_KEY && !process.env.SUPABASE_SERVICE_KEY.includes('placeholder');
+  let dbStatus = 'untested';
+
+  const { supabase } = require('./lib/supabase');
+  try {
+    const { count, error } = await supabase.from('otecs').select('id', { count: 'exact', head: true });
+    dbStatus = error ? 'error: ' + error.message : 'connected (otecs count: ' + count + ')';
+  } catch (e) {
+    dbStatus = 'exception: ' + e.message;
+  }
+
   res.json({
     status: 'ok',
     service: 'sence-rce-cloud-backend',
     version: '1.0.0',
+    env: {
+      has_supabase_url: hasUrl,
+      has_supabase_service_key: hasKey
+    },
+    database: dbStatus,
     timestamp: new Date().toISOString()
   });
 });
