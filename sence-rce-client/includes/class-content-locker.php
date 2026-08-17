@@ -105,10 +105,8 @@ class Sence_RCE_Content_Locker {
         $config = $status['course_config'] ?? array();
         $solicitar_cierre = $config['solicitar_cierre'] ?? false;
 
-        if ( $has_session && $solicitar_cierre ) {
+        if ( $has_session ) {
             return $feedback . $this->render_close_session_form( $user_id, $course_id, $status );
-        } elseif ( $has_session && ! $solicitar_cierre ) {
-            return $feedback . $this->render_session_active_card( $status );
         } else {
             return $feedback . $this->render_login_form( $user_id, $course_id, $status );
         }
@@ -333,19 +331,28 @@ class Sence_RCE_Content_Locker {
     }
 
     private function get_course_id_from_post( $post ) {
-        if ( ! function_exists( 'tutor' ) ) {
-            return $post->ID;
+        if ( ! $post ) {
+            return 0;
         }
 
-        $course_cpt = tutor()->course_post_type;
-        if ( $post->post_type === $course_cpt ) {
-            return $post->ID;
+        if ( function_exists( 'tutor_utils' ) && method_exists( tutor_utils(), 'get_course_id_by_subelement' ) ) {
+            $cid = tutor_utils()->get_course_id_by_subelement( $post->ID );
+            if ( $cid ) {
+                return intval( $cid );
+            }
         }
 
-        if ( in_array( $post->post_type, array( 'tutor_lessons', 'tutor_quiz' ) ) ) {
-            $course_id = get_post_meta( $post->ID, '_tutor_course_id_for_lesson', true );
-            if ( $course_id ) {
-                return intval( $course_id );
+        if ( in_array( $post->post_type, array( 'tutor_lessons', 'tutor_quiz', 'lesson' ) ) ) {
+            $meta_id = get_post_meta( $post->ID, '_tutor_course_id_for_lesson', true );
+            if ( $meta_id ) {
+                return intval( $meta_id );
+            }
+            $meta_id2 = get_post_meta( $post->ID, '_tutor_course_id', true );
+            if ( $meta_id2 ) {
+                return intval( $meta_id2 );
+            }
+            if ( $post->post_parent ) {
+                return intval( $post->post_parent );
             }
         }
 
