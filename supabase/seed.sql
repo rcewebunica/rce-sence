@@ -29,7 +29,7 @@ INSERT INTO otecs (
   '77309412-K',
   'admin@capnorte.cl',
   '+56 55 234 5678',
-  'free',
+  'starter',
   'sk-demo-otec2-9a8b7c6d5e4f3a2b',
   TRUE,
   '6ba7b810-9dad-11d1-80b4-00c04fd430c8',

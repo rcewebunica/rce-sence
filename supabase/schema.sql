@@ -6,7 +6,7 @@ CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 CREATE EXTENSION IF NOT EXISTS "pgcrypto";
 
 DO $$ BEGIN
-  CREATE TYPE plan_type AS ENUM ('free', 'starter', 'pro', 'enterprise');
+  CREATE TYPE plan_type AS ENUM ('starter', 'pro', 'enterprise');
 EXCEPTION
   WHEN duplicate_object THEN null;
 END $$;
@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS otecs (
   rut_otec        TEXT NOT NULL UNIQUE,
   email           TEXT NOT NULL UNIQUE,
   telefono        TEXT,
-  plan            plan_type DEFAULT 'free',
+  plan            plan_type DEFAULT 'starter',
   api_key         TEXT NOT NULL UNIQUE,
   is_active       BOOLEAN DEFAULT TRUE,
   token_sence     TEXT,

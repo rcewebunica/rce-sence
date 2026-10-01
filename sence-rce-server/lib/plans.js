@@ -4,14 +4,6 @@ const { supabase } = require('./supabase');
  * Definición de planes SaaS para OTECs
  */
 const PLANS = {
-  free: {
-    id: 'free',
-    name: 'Gratuito',
-    max_courses: 1,
-    max_sessions_month: 50,
-    price_clp: 0,
-    description: 'Ideal para pruebas y validación inicial con SENCE.'
-  },
   starter: {
     id: 'starter',
     name: 'Starter',
@@ -42,8 +34,8 @@ const PLANS = {
  * Verifica si la OTEC ha excedido el límite mensual de sesiones de asistencia
  */
 async function checkPlanLimit(otec) {
-  const planType = otec.plan || 'free';
-  const planDef = PLANS[planType] || PLANS.free;
+  const planType = otec.plan || 'starter';
+  const planDef = PLANS[planType] || PLANS.starter;
 
   // Enterprise no tiene límite
   if (planDef.max_sessions_month === -1) {
@@ -82,8 +74,8 @@ async function checkPlanLimit(otec) {
  * Verifica si la OTEC puede registrar un nuevo curso según su plan
  */
 async function checkCoursesLimit(otec) {
-  const planType = otec.plan || 'free';
-  const planDef = PLANS[planType] || PLANS.free;
+  const planType = otec.plan || 'starter';
+  const planDef = PLANS[planType] || PLANS.starter;
 
   if (planDef.max_courses === -1) {
     return { allowed: true, current: 0, limit: -1, plan: planDef.name };

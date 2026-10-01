@@ -318,8 +318,8 @@ router.get('/sessions/export-csv', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const otec = req.otec;
-    const planType = otec.plan || 'free';
-    const planDef = PLANS[planType] || PLANS.free;
+    const planType = otec.plan || 'starter';
+    const planDef = PLANS[planType] || PLANS.starter;
 
     const now = new Date();
     const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
@@ -386,8 +386,8 @@ router.get('/stats', async (req, res) => {
 router.get('/plan', async (req, res) => {
   try {
     const otec = req.otec;
-    const planType = otec.plan || 'free';
-    const planDef = PLANS[planType] || PLANS.free;
+    const planType = otec.plan || 'starter';
+    const planDef = PLANS[planType] || PLANS.starter;
 
     const planCheck = await checkPlanLimit(otec);
     const courseCheck = await checkCoursesLimit(otec);

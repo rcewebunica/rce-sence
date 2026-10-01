@@ -119,14 +119,13 @@ class Sence_RCE_Api_Client {
         // Catálogo por defecto cuando el servidor aún no está vinculado
         return array(
             'current_plan' => array(
-                'id'                 => 'free',
-                'name'               => 'Gratuito (Pendiente vincular servidor)',
-                'max_courses'        => 1,
-                'max_sessions_month' => 50,
-                'price_clp'          => 0
+                'id'                 => 'starter',
+                'name'               => 'Starter (Pendiente vincular servidor)',
+                'max_courses'        => 5,
+                'max_sessions_month' => 500,
+                'price_clp'          => 29900
             ),
             'all_plans' => array(
-                array( 'id' => 'free', 'name' => 'Gratuito', 'max_courses' => 1, 'max_sessions_month' => 50, 'price_clp' => 0 ),
                 array( 'id' => 'starter', 'name' => 'Starter', 'max_courses' => 5, 'max_sessions_month' => 500, 'price_clp' => 29900 ),
                 array( 'id' => 'pro', 'name' => 'Pro', 'max_courses' => 20, 'max_sessions_month' => 2000, 'price_clp' => 79900 ),
                 array( 'id' => 'enterprise', 'name' => 'Enterprise', 'max_courses' => -1, 'max_sessions_month' => -1, 'price_clp' => -1 )

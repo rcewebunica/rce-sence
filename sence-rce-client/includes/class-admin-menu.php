@@ -141,7 +141,7 @@ class Sence_RCE_Admin_Menu {
 
             <?php if ( isset( $stats['usage'] ) ) : ?>
             <div class="sence-rce-card">
-                <h3>Consumo del Plan: <?php echo esc_html( $stats['plan']['name'] ?? 'Free' ); ?></h3>
+                <h3>Consumo del Plan: <?php echo esc_html( $stats['plan']['name'] ?? 'Starter' ); ?></h3>
                 <div class="sence-rce-progress-container">
                     <div class="progress-bar">
                         <div class="progress-fill" style="width: <?php echo esc_attr( $stats['usage']['percent'] ); ?>%;"></div>
@@ -374,9 +374,9 @@ class Sence_RCE_Admin_Menu {
         <div class="wrap sence-rce-wrap">
             <h1>Tu Plan SaaS SENCE RCE</h1>
             <div class="sence-rce-card">
-                <h2>Plan Actual: <span style="color:#0073aa;"><?php echo esc_html( $current['name'] ?? 'Free' ); ?></span></h2>
-                <p>Capacidad máxima de cursos: <strong><?php echo ( isset( $current['max_courses'] ) && $current['max_courses'] === -1 ) ? 'Ilimitados' : esc_html( $current['max_courses'] ?? 1 ); ?></strong></p>
-                <p>Límite mensual de sesiones: <strong><?php echo ( isset( $current['max_sessions_month'] ) && $current['max_sessions_month'] === -1 ) ? 'Ilimitadas' : esc_html( $current['max_sessions_month'] ?? 50 ); ?></strong></p>
+                <h2>Plan Actual: <span style="color:#0073aa;"><?php echo esc_html( $current['name'] ?? 'Starter' ); ?></span></h2>
+                <p>Capacidad máxima de cursos: <strong><?php echo ( isset( $current['max_courses'] ) && $current['max_courses'] === -1 ) ? 'Ilimitados' : esc_html( $current['max_courses'] ?? 5 ); ?></strong></p>
+                <p>Límite mensual de sesiones: <strong><?php echo ( isset( $current['max_sessions_month'] ) && $current['max_sessions_month'] === -1 ) ? 'Ilimitadas' : esc_html( $current['max_sessions_month'] ?? 500 ); ?></strong></p>
             </div>
 
             <h2>Planes Disponibles</h2>
