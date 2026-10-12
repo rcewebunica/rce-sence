@@ -8,6 +8,7 @@ const rateLimit = require('express-rate-limit');
 const apiRouter = require('./routes/api');
 const callbacksRouter = require('./routes/callbacks');
 const mockRouter = require('./routes/mock');
+const adminRouter = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -93,6 +94,7 @@ app.get('/health', async (req, res) => {
 app.use('/api', apiLimiter, apiRouter);
 app.use('/callback', callbackLimiter, callbacksRouter);
 app.use('/mock', mockRouter);
+app.use('/admin', adminRouter);
 
 // 8. Manejador 404
 app.use((req, res) => {

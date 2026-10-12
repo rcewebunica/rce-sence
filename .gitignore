@@ -32,3 +32,5 @@ _tmp_zip/
 _tmp_zip_client/
 manual_content.txt
 extract_pdf.py
+*.backup*
+*.gz

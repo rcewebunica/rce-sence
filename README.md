@@ -43,6 +43,7 @@ El proyecto incluye tanto la solución **SaaS Cloud (Multi-OTEC)** como el plugi
   - Validación estricta de `CodSence` (10 dígitos) y `CodigoCurso` (mínimo 7 caracteres) para Líneas 3 y 6.
 - **Cronómetro en Tiempo Real:** Visualización en vivo del tiempo de asistencia del alumno con alerta de advertencia en los últimos 10 minutos.
 - **Simulador Mock SENCE:** Entorno de pruebas integrado para testear flujos sin necesidad de credenciales de producción.
+- **Panel Web Super Admin (`/admin`):** Gestión visual de OTECs, asignación de planes, creación de clientes y generación automática de API Keys sin tocar SQL.
 - **Exportación CSV:** Descarga directa de asistencias en formato compatible con Excel y auditorías SENCE.
 
 ---
