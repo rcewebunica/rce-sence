@@ -335,27 +335,64 @@ class Sence_RCE_Content_Locker {
             return 0;
         }
 
-        if ( function_exists( 'tutor_utils' ) && method_exists( tutor_utils(), 'get_course_id_by_subelement' ) ) {
-            $cid = tutor_utils()->get_course_id_by_subelement( $post->ID );
-            if ( $cid ) {
-                return intval( $cid );
+        $course_cpt = function_exists( 'tutor' ) ? tutor()->course_post_type : 'courses';
+
+        // 1. Si el post actual es directamente el curso
+        if ( $post->post_type === $course_cpt || $post->post_type === 'courses' ) {
+            return intval( $post->ID );
+        }
+
+        // 2. Variable global de Tutor LMS en vista de lección
+        global $course;
+        if ( ! empty( $course ) && isset( $course->ID ) ) {
+            return intval( $course->ID );
+        }
+
+        // 3. Funciones oficiales de Tutor LMS
+        if ( function_exists( 'tutor_utils' ) ) {
+            if ( method_exists( tutor_utils(), 'get_course_id_by' ) ) {
+                $cid = tutor_utils()->get_course_id_by( 'lesson', $post->ID );
+                if ( ! $cid ) {
+                    $cid = tutor_utils()->get_course_id_by( 'quiz', $post->ID );
+                }
+                if ( ! $cid ) {
+                    $cid = tutor_utils()->get_course_id_by( 'assignment', $post->ID );
+                }
+                if ( $cid ) {
+                    return intval( $cid );
+                }
+            }
+
+            if ( method_exists( tutor_utils(), 'get_course_id_by_subelement' ) ) {
+                $cid = tutor_utils()->get_course_id_by_subelement( $post->ID );
+                if ( $cid ) {
+                    return intval( $cid );
+                }
             }
         }
 
-        if ( in_array( $post->post_type, array( 'tutor_lessons', 'tutor_quiz', 'lesson' ) ) ) {
-            $meta_id = get_post_meta( $post->ID, '_tutor_course_id_for_lesson', true );
-            if ( $meta_id ) {
+        // 4. Metadatos conocidos de Tutor LMS
+        $meta_keys = array( '_tutor_course_id_for_lesson', '_tutor_course_id', '_course_id' );
+        foreach ( $meta_keys as $mkey ) {
+            $meta_id = get_post_meta( $post->ID, $mkey, true );
+            if ( $meta_id && is_numeric( $meta_id ) ) {
                 return intval( $meta_id );
             }
-            $meta_id2 = get_post_meta( $post->ID, '_tutor_course_id', true );
-            if ( $meta_id2 ) {
-                return intval( $meta_id2 );
-            }
-            if ( $post->post_parent ) {
-                return intval( $post->post_parent );
-            }
         }
 
-        return $post->ID;
+        // 5. Jerarquía de post_parent (Lección -> Tópico/Tema -> Curso)
+        $parent_id = $post->post_parent;
+        while ( $parent_id > 0 ) {
+            $parent = get_post( $parent_id );
+            if ( ! $parent ) {
+                break;
+            }
+            if ( $parent->post_type === $course_cpt || $parent->post_type === 'courses' ) {
+                return intval( $parent->ID );
+            }
+            $parent_id = $parent->post_parent;
+        }
+
+        return intval( $post->ID );
     }
 }

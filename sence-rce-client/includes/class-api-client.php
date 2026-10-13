@@ -21,9 +21,15 @@ class Sence_RCE_Api_Client {
         }
 
         $transient_key = 'sence_stat_' . md5( "{$wp_user_id}_{$wp_course_id}_{$run_alumno}" );
-        $cached = get_transient( $transient_key );
-        if ( false !== $cached ) {
-            return $cached;
+
+        // Si retornamos de un callback SENCE (inicio o cierre), invalidar cache para respuesta inmediata
+        if ( isset( $_GET['sence_success'] ) || isset( $_GET['sence_closed'] ) || isset( $_GET['sence_error'] ) ) {
+            delete_transient( $transient_key );
+        } else {
+            $cached = get_transient( $transient_key );
+            if ( false !== $cached ) {
+                return $cached;
+            }
         }
 
         $params = array(
