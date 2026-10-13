@@ -331,43 +331,50 @@ class Sence_RCE_Content_Locker {
     }
 
     private function get_course_id_from_post( $post ) {
-        if ( ! $post ) {
+        if ( ! $post || ! is_object( $post ) || empty( $post->ID ) ) {
             return 0;
         }
 
-        $course_cpt = function_exists( 'tutor' ) ? tutor()->course_post_type : 'courses';
+        $course_cpt = 'courses';
+        if ( function_exists( 'tutor' ) && is_object( tutor() ) && isset( tutor()->course_post_type ) ) {
+            $course_cpt = tutor()->course_post_type;
+        }
 
         // 1. Si el post actual es directamente el curso
-        if ( $post->post_type === $course_cpt || $post->post_type === 'courses' ) {
+        if ( isset( $post->post_type ) && ( $post->post_type === $course_cpt || $post->post_type === 'courses' ) ) {
             return intval( $post->ID );
         }
 
         // 2. Variable global de Tutor LMS en vista de lección
         global $course;
-        if ( ! empty( $course ) && isset( $course->ID ) ) {
+        if ( ! empty( $course ) && is_object( $course ) && isset( $course->ID ) ) {
             return intval( $course->ID );
         }
 
         // 3. Funciones oficiales de Tutor LMS
-        if ( function_exists( 'tutor_utils' ) ) {
-            if ( method_exists( tutor_utils(), 'get_course_id_by' ) ) {
-                $cid = tutor_utils()->get_course_id_by( 'lesson', $post->ID );
-                if ( ! $cid ) {
-                    $cid = tutor_utils()->get_course_id_by( 'quiz', $post->ID );
+        if ( function_exists( 'tutor_utils' ) && is_object( tutor_utils() ) ) {
+            try {
+                if ( method_exists( tutor_utils(), 'get_course_id_by' ) ) {
+                    $cid = tutor_utils()->get_course_id_by( 'lesson', $post->ID );
+                    if ( ! $cid ) {
+                        $cid = tutor_utils()->get_course_id_by( 'quiz', $post->ID );
+                    }
+                    if ( ! $cid ) {
+                        $cid = tutor_utils()->get_course_id_by( 'assignment', $post->ID );
+                    }
+                    if ( $cid ) {
+                        return intval( $cid );
+                    }
                 }
-                if ( ! $cid ) {
-                    $cid = tutor_utils()->get_course_id_by( 'assignment', $post->ID );
-                }
-                if ( $cid ) {
-                    return intval( $cid );
-                }
-            }
 
-            if ( method_exists( tutor_utils(), 'get_course_id_by_subelement' ) ) {
-                $cid = tutor_utils()->get_course_id_by_subelement( $post->ID );
-                if ( $cid ) {
-                    return intval( $cid );
+                if ( method_exists( tutor_utils(), 'get_course_id_by_subelement' ) ) {
+                    $cid = tutor_utils()->get_course_id_by_subelement( $post->ID );
+                    if ( $cid ) {
+                        return intval( $cid );
+                    }
                 }
+            } catch ( Throwable $t ) {
+                // Silently fallback
             }
         }
 
@@ -381,16 +388,20 @@ class Sence_RCE_Content_Locker {
         }
 
         // 5. Jerarquía de post_parent (Lección -> Tópico/Tema -> Curso)
-        $parent_id = $post->post_parent;
-        while ( $parent_id > 0 ) {
-            $parent = get_post( $parent_id );
-            if ( ! $parent ) {
-                break;
+        if ( isset( $post->post_parent ) && $post->post_parent > 0 ) {
+            $parent_id = $post->post_parent;
+            $safety_counter = 0;
+            while ( $parent_id > 0 && $safety_counter < 5 ) {
+                $safety_counter++;
+                $parent = get_post( $parent_id );
+                if ( ! $parent || ! is_object( $parent ) ) {
+                    break;
+                }
+                if ( isset( $parent->post_type ) && ( $parent->post_type === $course_cpt || $parent->post_type === 'courses' ) ) {
+                    return intval( $parent->ID );
+                }
+                $parent_id = $parent->post_parent;
             }
-            if ( $parent->post_type === $course_cpt || $parent->post_type === 'courses' ) {
-                return intval( $parent->ID );
-            }
-            $parent_id = $parent->post_parent;
         }
 
         return intval( $post->ID );
