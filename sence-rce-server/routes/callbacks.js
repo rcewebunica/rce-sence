@@ -115,6 +115,50 @@ router.post('/open', async (req, res) => {
       }
     }
 
+    // 4.5. Auto-cerrar sesiones previas activas del mismo alumno para evitar sesiones huérfanas
+    if (RunAlumno) {
+      try {
+        const { data: previousActiveSessions } = await supabase
+          .from('sessions')
+          .select('id, session_opened_at, id_sesion_alumno')
+          .eq('otec_id', otec.id)
+          .eq('run_alumno', RunAlumno)
+          .eq('is_active', true);
+
+        if (previousActiveSessions && previousActiveSessions.length > 0) {
+          const now = new Date();
+          for (const prev of previousActiveSessions) {
+            const openedAt = new Date(prev.session_opened_at).getTime();
+            const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - openedAt) / 1000));
+            const cappedSeconds = Math.min(elapsedSeconds, 14400); // Tope de 4 horas máximo según norma
+
+            await supabase
+              .from('sessions')
+              .update({
+                session_closed_at: now.toISOString(),
+                fecha_hora_cierre: now.toISOString().replace('T', ' ').substring(0, 19),
+                tiempo_sesion_seg: cappedSeconds,
+                is_active: false
+              })
+              .eq('id', prev.id);
+
+            await supabase.from('usage_log').insert({
+              otec_id: otec.id,
+              event_type: 'session_auto_close',
+              metadata: {
+                session_id: prev.id,
+                id_sesion_alumno: prev.id_sesion_alumno,
+                tiempo_sesion_seg: cappedSeconds,
+                reason: 'AUTO_CLOSED_ON_NEW_LOGIN'
+              }
+            });
+          }
+        }
+      } catch (autoCloseErr) {
+        console.warn('[SENCE Callback] Advertencia al auto-cerrar sesiones previas:', autoCloseErr);
+      }
+    }
+
     // 5. Guardar registro de sesión en Supabase
     const { error: sessionErr } = await supabase
       .from('sessions')

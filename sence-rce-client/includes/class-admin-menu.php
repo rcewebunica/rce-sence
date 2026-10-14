@@ -283,6 +283,19 @@ class Sence_RCE_Admin_Menu {
     }
 
     public function render_sessions() {
+        // Procesar cierre manual de sesión si fue solicitado por el administrador
+        if ( isset( $_GET['action'] ) && $_GET['action'] === 'close_session' && ! empty( $_GET['session_id'] ) ) {
+            $target_sid = intval( $_GET['session_id'] );
+            check_admin_referer( 'sence_close_session_' . $target_sid );
+            $close_res = $this->api->close_session_manual( $target_sid );
+            if ( ! is_wp_error( $close_res ) && ! empty( $close_res['success'] ) ) {
+                echo '<div class="notice notice-success is-dismissible"><p>Sesión #' . $target_sid . ' cerrada y conciliada correctamente.</p></div>';
+            } else {
+                $err_msg = is_wp_error( $close_res ) ? $close_res->get_error_message() : ( $close_res['error'] ?? 'Error desconocido' );
+                echo '<div class="notice notice-error is-dismissible"><p>No se pudo cerrar la sesión: ' . esc_html( $err_msg ) . '</p></div>';
+            }
+        }
+
         $page = isset( $_GET['paged'] ) ? max( 1, intval( $_GET['paged'] ) ) : 1;
         $limit = 25;
         $offset = ( $page - 1 ) * $limit;
@@ -323,6 +336,13 @@ class Sence_RCE_Admin_Menu {
                             <td>
                                 <?php if ( $s['is_active'] && ! $s['session_closed_at'] ) : ?>
                                     <span class="sence-badge success">En Curso</span>
+                                    <?php
+                                    $close_url = wp_nonce_url(
+                                        admin_url( 'admin.php?page=sence-rce-sessions&action=close_session&session_id=' . $s['session_id'] ),
+                                        'sence_close_session_' . $s['session_id']
+                                    );
+                                    ?>
+                                    <br><a href="<?php echo esc_url( $close_url ); ?>" class="button button-small" style="margin-top:6px; font-size:11px;" onclick="return confirm('¿Deseas cerrar manualmente esta sesión de asistencia?');">Cerrar Sesión</a>
                                 <?php elseif ( $s['error_code'] ) : ?>
                                     <span class="sence-badge error">Error <?php echo esc_html( $s['error_code'] ); ?></span>
                                 <?php else : ?>

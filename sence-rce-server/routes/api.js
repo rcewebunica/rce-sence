@@ -222,6 +222,33 @@ router.get('/sessions', async (req, res) => {
       query = query.lte('session_opened_at', dateTo);
     }
 
+    // Auto-conciliación de sesiones huérfanas de más de 4 horas (tope reglamentario SENCE)
+    try {
+      const fourHoursAgo = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+      const { data: expiredSessions } = await supabase
+        .from('sessions')
+        .select('id, session_opened_at')
+        .eq('otec_id', otec.id)
+        .eq('is_active', true)
+        .lt('session_opened_at', fourHoursAgo);
+
+      if (expiredSessions && expiredSessions.length > 0) {
+        for (const exp of expiredSessions) {
+          await supabase
+            .from('sessions')
+            .update({
+              session_closed_at: new Date().toISOString(),
+              fecha_hora_cierre: new Date().toISOString().replace('T', ' ').substring(0, 19),
+              tiempo_sesion_seg: 14400, // 4 horas tope SENCE
+              is_active: false
+            })
+            .eq('id', exp.id);
+        }
+      }
+    } catch (e) {
+      console.warn('Advertencia en limpieza de sesiones huérfanas:', e);
+    }
+
     const { data: sessions, count, error } = await query
       .order('session_opened_at', { ascending: false })
       .range(offset, offset + limit - 1);
@@ -240,6 +267,61 @@ router.get('/sessions', async (req, res) => {
   } catch (error) {
     console.error('Error en /api/sessions:', error);
     res.status(500).json({ error: 'Error interno de sesiones' });
+  }
+});
+
+/**
+ * POST /api/sessions/close-manual
+ * Permite al administrador cerrar manualmente una sesión que quedó abierta
+ */
+router.post('/sessions/close-manual', async (req, res) => {
+  try {
+    const otec = req.otec;
+    const sessionId = req.body.session_id ? parseInt(req.body.session_id, 10) : null;
+
+    if (!sessionId) {
+      return res.status(400).json({ error: 'session_id requerido' });
+    }
+
+    const { data: session, error: findErr } = await supabase
+      .from('sessions')
+      .select('*')
+      .eq('id', sessionId)
+      .eq('otec_id', otec.id)
+      .single();
+
+    if (findErr || !session) {
+      return res.status(404).json({ error: 'Sesión no encontrada o no pertenece a esta OTEC' });
+    }
+
+    if (!session.is_active) {
+      return res.json({ success: true, message: 'La sesión ya estaba cerrada', session });
+    }
+
+    const now = new Date();
+    const openedAt = new Date(session.session_opened_at).getTime();
+    const elapsedSeconds = Math.min(Math.max(0, Math.floor((now.getTime() - openedAt) / 1000)), 14400);
+
+    const { data: updated, error: updErr } = await supabase
+      .from('sessions')
+      .update({
+        session_closed_at: now.toISOString(),
+        fecha_hora_cierre: now.toISOString().replace('T', ' ').substring(0, 19),
+        tiempo_sesion_seg: elapsedSeconds,
+        is_active: false
+      })
+      .eq('id', session.id)
+      .select()
+      .single();
+
+    if (updErr) {
+      return res.status(500).json({ error: 'Error al actualizar sesión en base de datos' });
+    }
+
+    res.json({ success: true, message: 'Sesión cerrada exitosamente', session: updated });
+  } catch (err) {
+    console.error('Error en /api/sessions/close-manual:', err);
+    res.status(500).json({ error: 'Error interno al cerrar sesión' });
   }
 });
 

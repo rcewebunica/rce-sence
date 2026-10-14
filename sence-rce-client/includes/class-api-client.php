@@ -90,6 +90,13 @@ class Sence_RCE_Api_Client {
     }
 
     /**
+     * Cierra manualmente una sesión activa desde el panel de administración
+     */
+    public function close_session_manual( $session_id ) {
+        return $this->_request( '/api/sessions/close-manual', 'POST', array( 'session_id' => intval( $session_id ) ) );
+    }
+
+    /**
      * Resumen estadístico
      */
     public function get_stats() {
