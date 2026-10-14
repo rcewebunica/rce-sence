@@ -6,11 +6,11 @@ class Sence_RCE_Settings {
 
     public static function get( $key, $default = null ) {
         $options = get_option( 'sence_rce_cloud_options', array() );
-        return isset( $options[ $key ] ) ? $options[ $key ] : $default;
+        return array_key_exists( $key, $options ) ? $options[ $key ] : $default;
     }
 
     public function register_settings() {
-        register_setting( 'sence_rce_cloud_options_group', 'sence_rce_cloud_options' );
+        register_setting( 'sence_rce_cloud_options_group', 'sence_rce_cloud_options', array( $this, 'sanitize_options' ) );
 
         add_settings_section(
             'sence_rce_server_section',
@@ -88,9 +88,22 @@ class Sence_RCE_Settings {
         echo '<p class="description">Token obtenido en <a href="https://sistemas.sence.cl/rts" target="_blank">sistemas.sence.cl/rts</a>.</p>';
     }
 
+    public function sanitize_options( $input ) {
+        $output = array();
+        $output['server_url']  = isset( $input['server_url'] ) ? esc_url_raw( trim( $input['server_url'] ) ) : '';
+        $output['api_key']     = isset( $input['api_key'] ) ? sanitize_text_field( trim( $input['api_key'] ) ) : '';
+        $output['rut_otec']    = isset( $input['rut_otec'] ) ? sanitize_text_field( trim( $input['rut_otec'] ) ) : '';
+        $output['token_sence'] = isset( $input['token_sence'] ) ? sanitize_text_field( trim( $input['token_sence'] ) ) : '';
+        // Si el checkbox está marcado llega '1', si se desmarca (o el hidden input envía 0) se guarda 0
+        $output['test_env']    = ! empty( $input['test_env'] ) ? 1 : 0;
+        return $output;
+    }
+
     public function render_test_env_field() {
-        $val = self::get( 'test_env', 1 );
+        $val = intval( self::get( 'test_env', 1 ) );
+        echo '<input type="hidden" name="sence_rce_cloud_options[test_env]" value="0">';
         echo '<label><input type="checkbox" name="sence_rce_cloud_options[test_env]" value="1" ' . checked( 1, $val, false ) . '> Utilizar Ambiente de Pruebas (Simulador Local / SENCE Test)</label>';
+        echo '<p class="description">Marcar para realizar pruebas con el simulador o entorno de pruebas. Desmarcar para activar el <strong>Entorno Oficial de Producción de SENCE</strong> (sistemas.sence.cl).</p>';
     }
 
     public function ajax_test_connection() {

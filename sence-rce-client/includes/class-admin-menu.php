@@ -164,6 +164,9 @@ class Sence_RCE_Admin_Menu {
     }
 
     public function render_courses() {
+        $selected_id = isset( $_GET['edit_course'] ) ? intval( $_GET['edit_course'] ) : 0;
+        $current_cfg = array();
+
         // Guardar configuración del curso si se envió el formulario
         if ( isset( $_POST['sence_rce_save_course'] ) && check_admin_referer( 'sence_rce_course_nonce' ) ) {
             $course_id = intval( $_POST['wp_course_id'] );
@@ -174,13 +177,17 @@ class Sence_RCE_Admin_Menu {
                 'codigo_sence'           => sanitize_text_field( $_POST['codigo_sence'] ?? '' ),
                 'codigo_curso'           => sanitize_text_field( $_POST['codigo_curso'] ?? '' ),
                 'linea_capacitacion'     => intval( $_POST['linea_capacitacion'] ?? 3 ),
-                'asistencia_obligatoria' => isset( $_POST['asistencia_obligatoria'] ) ? 1 : 0,
-                'solicitar_cierre'       => isset( $_POST['solicitar_cierre'] ) ? 1 : 0,
+                'asistencia_obligatoria' => ! empty( $_POST['asistencia_obligatoria'] ) ? 1 : 0,
+                'solicitar_cierre'       => ! empty( $_POST['solicitar_cierre'] ) ? 1 : 0,
             );
 
+            delete_transient( 'sence_cfg_' . $course_id );
             $res = $this->api->upsert_course( $data );
             if ( ! is_wp_error( $res ) ) {
                 echo '<div class="notice notice-success is-dismissible"><p>Configuración del curso guardada y sincronizada con el backend central.</p></div>';
+                if ( ! empty( $res['course'] ) && is_array( $res['course'] ) ) {
+                    $current_cfg = $res['course'];
+                }
             } else {
                 echo '<div class="notice notice-error is-dismissible"><p>Error al guardar en el servidor: ' . esc_html( $res->get_error_message() ) . '</p></div>';
             }
@@ -196,8 +203,9 @@ class Sence_RCE_Admin_Menu {
             'order'          => 'ASC'
         ) );
 
-        $selected_id = isset( $_GET['edit_course'] ) ? intval( $_GET['edit_course'] ) : 0;
-        $current_cfg = $selected_id ? $this->api->get_course_config( $selected_id ) : array();
+        if ( $selected_id && empty( $current_cfg ) ) {
+            $current_cfg = $this->api->get_course_config( $selected_id );
+        }
         ?>
         <div class="wrap sence-rce-wrap">
             <h1>Configuración SENCE por Curso</h1>
@@ -258,13 +266,15 @@ class Sence_RCE_Admin_Menu {
                             <tr>
                                 <th>Asistencia Obligatoria</th>
                                 <td>
-                                    <label><input type="checkbox" name="asistencia_obligatoria" value="1" <?php checked( $current_cfg['asistencia_obligatoria'] ?? 1, 1 ); ?>> Bloquear lecciones hasta iniciar asistencia SENCE</label>
+                                    <input type="hidden" name="asistencia_obligatoria" value="0">
+                                    <label><input type="checkbox" name="asistencia_obligatoria" value="1" <?php checked( ! empty( $current_cfg['asistencia_obligatoria'] ), true ); ?>> Bloquear lecciones hasta iniciar asistencia SENCE</label>
                                 </td>
                             </tr>
                             <tr>
                                 <th>Solicitar Cierre de Sesión</th>
                                 <td>
-                                    <label><input type="checkbox" name="solicitar_cierre" value="1" <?php checked( $current_cfg['solicitar_cierre'] ?? 0, 1 ); ?>> Exigir al alumno registrar cierre antes de retirarse</label>
+                                    <input type="hidden" name="solicitar_cierre" value="0">
+                                    <label><input type="checkbox" name="solicitar_cierre" value="1" <?php checked( ! empty( $current_cfg['solicitar_cierre'] ), true ); ?>> Exigir al alumno registrar cierre antes de retirarse</label>
                                 </td>
                             </tr>
                         </table>

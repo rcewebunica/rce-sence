@@ -79,6 +79,9 @@ class Sence_RCE_Api_Client {
      * Sincroniza la configuración de un curso en el backend central
      */
     public function upsert_course( $data ) {
+        if ( ! empty( $data['wp_course_id'] ) ) {
+            delete_transient( 'sence_cfg_' . $data['wp_course_id'] );
+        }
         return $this->_request( '/api/course/upsert', 'POST', $data );
     }
 
