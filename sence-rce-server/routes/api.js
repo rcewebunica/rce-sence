@@ -368,6 +368,26 @@ router.get('/sessions/export-csv', async (req, res) => {
     ];
     res.write(headers.join(';') + '\r\n');
 
+    function formatChileDate(isoDate) {
+      if (!isoDate) return '';
+      try {
+        const d = new Date(isoDate);
+        if (isNaN(d.getTime())) return isoDate;
+        return d.toLocaleString('es-CL', {
+          timeZone: 'America/Santiago',
+          year: 'numeric',
+          month: '2-digit',
+          day: '2-digit',
+          hour: '2-digit',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: false
+        });
+      } catch (e) {
+        return isoDate;
+      }
+    }
+
     for (const s of sessions || []) {
       const row = [
         s.session_id,
@@ -377,8 +397,8 @@ router.get('/sessions/export-csv', async (req, res) => {
         `"${s.run_alumno || ''}"`,
         `"${s.id_sesion_alumno || ''}"`,
         `"${s.id_sesion_sence || ''}"`,
-        `"${s.session_opened_at || ''}"`,
-        `"${s.session_closed_at || ''}"`,
+        `"${formatChileDate(s.session_opened_at)}"`,
+        `"${formatChileDate(s.session_closed_at)}"`,
         s.tiempo_sesion_seg || 0,
         `"${s.tiempo_sesion_formateado || ''}"`,
         `"${s.estado_sesion || ''}"`

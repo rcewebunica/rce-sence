@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SENCE RCE — Asistencia e-Learning (Cloud SaaS)
  * Description: Integración con SENCE RCE mediante servidor central Railway + Supabase. Control de asistencia obligatorio para cursos Tutor LMS.
- * Version: 2.2.0
+ * Version: 2.2.1
  * Author: Webunica Chile
  * Text Domain: sence-rce
  * Requires PHP: 7.4
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SENCE_RCE_VERSION', '2.2.0' );
+define( 'SENCE_RCE_VERSION', '2.2.1' );
 define( 'SENCE_RCE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SENCE_RCE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 

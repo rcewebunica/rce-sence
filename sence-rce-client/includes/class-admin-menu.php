@@ -330,8 +330,8 @@ class Sence_RCE_Admin_Menu {
                             <td>#<?php echo esc_html( $s['session_id'] ); ?></td>
                             <td><strong><?php echo esc_html( $s['run_alumno'] ); ?></strong></td>
                             <td><?php echo esc_html( $s['nombre_curso'] ?: 'ID: ' . $s['course_id'] ); ?></td>
-                            <td><?php echo esc_html( $s['session_opened_at'] ? date( 'd/m/Y H:i:s', strtotime( $s['session_opened_at'] ) ) : '-' ); ?></td>
-                            <td><?php echo esc_html( $s['session_closed_at'] ? date( 'd/m/Y H:i:s', strtotime( $s['session_closed_at'] ) ) : '-' ); ?></td>
+                            <td><?php echo esc_html( $this->format_chile_datetime( $s['session_opened_at'] ?? '' ) ); ?></td>
+                            <td><?php echo esc_html( $this->format_chile_datetime( $s['session_closed_at'] ?? '' ) ); ?></td>
                             <td><?php echo esc_html( $s['tiempo_sesion_formateado'] ?? '-' ); ?></td>
                             <td>
                                 <?php if ( $s['is_active'] && ! $s['session_closed_at'] ) : ?>
@@ -421,5 +421,22 @@ class Sence_RCE_Admin_Menu {
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Formatea un timestamp ISO a la hora oficial de Chile (America/Santiago)
+     */
+    private function format_chile_datetime( $datetime_str ) {
+        if ( empty( $datetime_str ) ) {
+            return '-';
+        }
+        try {
+            $tz = new DateTimeZone( 'America/Santiago' );
+            $dt = new DateTime( $datetime_str );
+            $dt->setTimezone( $tz );
+            return $dt->format( 'd/m/Y H:i:s' );
+        } catch ( Exception $e ) {
+            return $datetime_str;
+        }
     }
 }
