@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { supabase } = require('../lib/supabase');
-const { checkPlanLimit } = require('../lib/plans');
 
 /**
  * Helper para construir URL de redirección con parámetros limpios
@@ -76,14 +75,7 @@ router.post('/open', async (req, res) => {
       return res.redirect(302, buildRedirectUrl(wpRetoma, { sence_error: 'INVALID_OTEC' }));
     }
 
-    // 3. Validar límite mensual del plan
-    const planCheck = await checkPlanLimit(otec);
-    if (!planCheck.allowed) {
-      console.warn(`[SENCE Callback] Límite de plan excedido para OTEC ${otec.nombre}: ${planCheck.reason}`);
-      return res.redirect(302, buildRedirectUrl(wpRetoma, { sence_error: 'PLAN_LIMIT_EXCEEDED' }));
-    }
-
-    // 4. Buscar o registrar el curso
+    // 3. Buscar o registrar el curso
     let courseId = null;
     if (wpCourseId) {
       const { data: course } = await supabase

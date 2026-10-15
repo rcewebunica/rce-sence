@@ -41,6 +41,8 @@ CREATE TABLE IF NOT EXISTS courses (
   linea_capacitacion     INTEGER DEFAULT 3 CHECK (linea_capacitacion IN (1, 2, 3, 4, 5, 6)),
   asistencia_obligatoria BOOLEAN DEFAULT TRUE,
   solicitar_cierre       BOOLEAN DEFAULT FALSE,
+  fecha_inicio           DATE,
+  fecha_termino          DATE,
   is_active              BOOLEAN DEFAULT TRUE,
   created_at             TIMESTAMPTZ DEFAULT NOW(),
   updated_at             TIMESTAMPTZ DEFAULT NOW(),

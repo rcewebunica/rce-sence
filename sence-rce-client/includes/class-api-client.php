@@ -118,35 +118,16 @@ class Sence_RCE_Api_Client {
             'total_sessions'      => 0,
             'active_sessions'     => 0,
             'sessions_this_month' => 0,
-            'total_courses'       => 0,
-            'plan'                => array( 'name' => 'No Conectado' )
+            'total_courses'       => 0
         );
     }
 
     /**
-     * Información del Plan SaaS
+     * Elimina todos los registros de asistencias de la OTEC para reiniciar el libro digital
      */
-    public function get_plan() {
-        $response = $this->_request( '/api/plan', 'GET' );
-        if ( ! is_wp_error( $response ) && is_array( $response ) && ! empty( $response['all_plans'] ) ) {
-            return $response;
-        }
-
-        // Catálogo por defecto cuando el servidor aún no está vinculado
-        return array(
-            'current_plan' => array(
-                'id'                 => 'starter',
-                'name'               => 'Starter (Pendiente vincular servidor)',
-                'max_courses'        => 5,
-                'max_sessions_month' => 500,
-                'price_clp'          => 29900
-            ),
-            'all_plans' => array(
-                array( 'id' => 'starter', 'name' => 'Starter', 'max_courses' => 5, 'max_sessions_month' => 500, 'price_clp' => 29900 ),
-                array( 'id' => 'pro', 'name' => 'Pro', 'max_courses' => 20, 'max_sessions_month' => 2000, 'price_clp' => 79900 ),
-                array( 'id' => 'enterprise', 'name' => 'Enterprise', 'max_courses' => -1, 'max_sessions_month' => -1, 'price_clp' => -1 )
-            )
-        );
+    public function reset_sessions() {
+        delete_transient( 'sence_rce_stats' );
+        return $this->_request( '/api/sessions/reset', 'POST' );
     }
 
     /**

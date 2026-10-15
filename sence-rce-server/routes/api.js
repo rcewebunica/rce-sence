@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const { supabase } = require('../lib/supabase');
 const { requireApiKey } = require('../middleware/auth');
-const { PLANS, checkPlanLimit, checkCoursesLimit } = require('../lib/plans');
 
 // Todas las rutas de esta API requieren API Key válida
 router.use(requireApiKey);
@@ -30,12 +29,23 @@ router.get('/session/status', async (req, res) => {
       .eq('wp_course_id', wpCourseId)
       .single();
 
+    // Fecha actual en zona horaria de Chile (YYYY-MM-DD)
+    const todayCl = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
+    const fechaInicio = course && course.fecha_inicio ? course.fecha_inicio : null;
+    const fechaTermino = course && course.fecha_termino ? course.fecha_termino : null;
+    let accessState = 'open';
+    if (fechaInicio && todayCl < fechaInicio) accessState = 'not_started';
+    else if (fechaTermino && todayCl > fechaTermino) accessState = 'ended';
+
     const courseConfig = {
       codigo_sence: course ? course.codigo_sence : '',
       codigo_curso: course ? course.codigo_curso : '',
       linea_capacitacion: course ? course.linea_capacitacion : 3,
       solicitar_cierre: course ? course.solicitar_cierre : false,
-      asistencia_obligatoria: course ? course.asistencia_obligatoria : true
+      asistencia_obligatoria: course ? course.asistencia_obligatoria : true,
+      fecha_inicio: fechaInicio,
+      fecha_termino: fechaTermino,
+      access_state: accessState
     };
 
     // 2. Buscar sesión activa
@@ -131,29 +141,20 @@ router.post('/course/upsert', async (req, res) => {
       codigo_curso,
       linea_capacitacion,
       asistencia_obligatoria,
-      solicitar_cierre
+      solicitar_cierre,
+      fecha_inicio,
+      fecha_termino
     } = req.body;
 
     if (!wp_course_id) {
       return res.status(400).json({ error: 'wp_course_id es requerido' });
     }
 
-    // Verificar límite de cursos según plan si es inserción
-    const { data: existing } = await supabase
-      .from('courses')
-      .select('id')
-      .eq('otec_id', otec.id)
-      .eq('wp_course_id', wp_course_id)
-      .single();
-
-    if (!existing) {
-      const courseCheck = await checkCoursesLimit(otec);
-      if (!courseCheck.allowed) {
-        return res.status(403).json({
-          error: courseCheck.reason,
-          code: 'PLAN_LIMIT_REACHED'
-        });
-      }
+    const toDate = (v) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    const fechaInicio = toDate(fecha_inicio);
+    const fechaTermino = toDate(fecha_termino);
+    if (fechaInicio && fechaTermino && fechaTermino < fechaInicio) {
+      return res.status(400).json({ error: 'La fecha de término no puede ser anterior a la fecha de inicio' });
     }
 
     const payload = {
@@ -166,6 +167,8 @@ router.post('/course/upsert', async (req, res) => {
       linea_capacitacion: linea_capacitacion ? parseInt(linea_capacitacion, 10) : 3,
       asistencia_obligatoria: asistencia_obligatoria === undefined ? true : Boolean(asistencia_obligatoria),
       solicitar_cierre: Boolean(solicitar_cierre),
+      fecha_inicio: fechaInicio,
+      fecha_termino: fechaTermino,
       is_active: true
     };
 
@@ -326,6 +329,31 @@ router.post('/sessions/close-manual', async (req, res) => {
 });
 
 /**
+ * POST /api/sessions/reset
+ * Elimina todos los registros de asistencia de la OTEC (para reiniciar el libro digital en blanco)
+ */
+router.post('/sessions/reset', async (req, res) => {
+  try {
+    const otec = req.otec;
+
+    const { error } = await supabase
+      .from('sessions')
+      .delete()
+      .eq('otec_id', otec.id);
+
+    if (error) {
+      console.error('Error al resetear sesiones:', error);
+      return res.status(500).json({ error: 'Error al eliminar registros de asistencia: ' + error.message });
+    }
+
+    res.json({ success: true, message: 'Todos los registros de asistencia han sido eliminados correctamente.' });
+  } catch (err) {
+    console.error('Error en /api/sessions/reset:', err);
+    res.status(500).json({ error: 'Error interno al resetear registros.' });
+  }
+});
+
+/**
  * GET /api/sessions/export-csv
  * Descarga directa de archivo CSV con las asistencias
  */
@@ -420,8 +448,6 @@ router.get('/sessions/export-csv', async (req, res) => {
 router.get('/stats', async (req, res) => {
   try {
     const otec = req.otec;
-    const planType = otec.plan || 'starter';
-    const planDef = PLANS[planType] || PLANS.starter;
 
     const now = new Date();
     const startOfMonth = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1)).toISOString();
@@ -453,70 +479,15 @@ router.get('/stats', async (req, res) => {
       .eq('otec_id', otec.id)
       .eq('is_active', true);
 
-    const sessionsUsed = monthSessions || 0;
-    const sessionsLimit = planDef.max_sessions_month;
-    const percentUsed = sessionsLimit > 0 ? Math.min(100, Math.round((sessionsUsed / sessionsLimit) * 100)) : 0;
-
     res.json({
       total_sessions: totalSessions || 0,
       active_sessions: activeSessions || 0,
-      sessions_this_month: sessionsUsed,
-      total_courses: totalCourses || 0,
-      plan: {
-        id: planDef.id,
-        name: planDef.name,
-        max_courses: planDef.max_courses,
-        max_sessions_month: planDef.max_sessions_month,
-        price_clp: planDef.price_clp
-      },
-      usage: {
-        sessions_used: sessionsUsed,
-        sessions_limit: sessionsLimit,
-        percent: percentUsed
-      }
+      sessions_this_month: monthSessions || 0,
+      total_courses: totalCourses || 0
     });
   } catch (error) {
     console.error('Error en /api/stats:', error);
     res.status(500).json({ error: 'Error al obtener estadísticas' });
-  }
-});
-
-/**
- * GET /api/plan
- * Información detallada del plan contratado y catálogo de planes
- */
-router.get('/plan', async (req, res) => {
-  try {
-    const otec = req.otec;
-    const planType = otec.plan || 'starter';
-    const planDef = PLANS[planType] || PLANS.starter;
-
-    const planCheck = await checkPlanLimit(otec);
-    const courseCheck = await checkCoursesLimit(otec);
-
-    res.json({
-      current_plan: {
-        ...planDef,
-        expires_at: otec.plan_expires_at,
-        is_active: otec.is_active
-      },
-      usage: {
-        sessions: {
-          current: planCheck.current,
-          limit: planCheck.limit,
-          allowed: planCheck.allowed
-        },
-        courses: {
-          current: courseCheck.current,
-          limit: courseCheck.limit,
-          allowed: courseCheck.allowed
-        }
-      },
-      all_plans: Object.values(PLANS)
-    });
-  } catch (error) {
-    console.error('Error en /api/plan:', error);
-    res.status(500).json({ error: 'Error al obtener plan' });
   }
 });
 

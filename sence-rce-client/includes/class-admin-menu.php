@@ -56,15 +56,6 @@ class Sence_RCE_Admin_Menu {
             'sence-rce-settings',
             array( $this, 'render_settings' )
         );
-
-        add_submenu_page(
-            'sence-rce',
-            'Tu Plan',
-            'Tu Plan',
-            'manage_options',
-            'sence-rce-plan',
-            array( $this, 'render_plan' )
-        );
     }
 
     public function enqueue_admin_assets( $hook ) {
@@ -139,21 +130,6 @@ class Sence_RCE_Admin_Menu {
                 </div>
             </div>
 
-            <?php if ( isset( $stats['usage'] ) ) : ?>
-            <div class="sence-rce-card">
-                <h3>Consumo del Plan: <?php echo esc_html( $stats['plan']['name'] ?? 'Starter' ); ?></h3>
-                <div class="sence-rce-progress-container">
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: <?php echo esc_attr( $stats['usage']['percent'] ); ?>%;"></div>
-                    </div>
-                    <div class="progress-labels">
-                        <span><?php echo esc_html( $stats['usage']['sessions_used'] ); ?> sesiones consumidas</span>
-                        <span>Límite: <?php echo $stats['usage']['sessions_limit'] === -1 ? 'Ilimitado' : esc_html( $stats['usage']['sessions_limit'] ) . ' / mes'; ?></span>
-                    </div>
-                </div>
-            </div>
-            <?php endif; ?>
-
             <?php else : ?>
             <div class="sence-rce-card">
                 <p>⚠️ No se pudieron obtener estadísticas del servidor central. Verifique que la URL y la API Key estén correctamente ingresadas en <a href="<?php echo admin_url( 'admin.php?page=sence-rce-settings' ); ?>">Configuración</a>.</p>
@@ -179,6 +155,8 @@ class Sence_RCE_Admin_Menu {
                 'linea_capacitacion'     => intval( $_POST['linea_capacitacion'] ?? 3 ),
                 'asistencia_obligatoria' => ! empty( $_POST['asistencia_obligatoria'] ) ? 1 : 0,
                 'solicitar_cierre'       => ! empty( $_POST['solicitar_cierre'] ) ? 1 : 0,
+                'fecha_inicio'           => sanitize_text_field( $_POST['fecha_inicio'] ?? '' ),
+                'fecha_termino'          => sanitize_text_field( $_POST['fecha_termino'] ?? '' ),
             );
 
             delete_transient( 'sence_cfg_' . $course_id );
@@ -264,6 +242,20 @@ class Sence_RCE_Admin_Menu {
                                 </td>
                             </tr>
                             <tr>
+                                <th>Fecha de Inicio</th>
+                                <td>
+                                    <input type="date" name="fecha_inicio" value="<?php echo esc_attr( $current_cfg['fecha_inicio'] ?? '' ); ?>">
+                                    <p class="description">Desde esta fecha los alumnos podrán registrar asistencia. Vacío = sin restricción.</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Fecha de Término</th>
+                                <td>
+                                    <input type="date" name="fecha_termino" value="<?php echo esc_attr( $current_cfg['fecha_termino'] ?? '' ); ?>">
+                                    <p class="description">Hasta esta fecha (inclusive). Después no se podrá registrar asistencia. Vacío = sin restricción.</p>
+                                </td>
+                            </tr>
+                            <tr>
                                 <th>Asistencia Obligatoria</th>
                                 <td>
                                     <input type="hidden" name="asistencia_obligatoria" value="0">
@@ -293,6 +285,18 @@ class Sence_RCE_Admin_Menu {
     }
 
     public function render_sessions() {
+        // Procesar vaciado/reinicio del libro de asistencia si fue solicitado por el administrador
+        if ( isset( $_GET['action'] ) && $_GET['action'] === 'reset_sessions' ) {
+            check_admin_referer( 'sence_reset_sessions' );
+            $reset_res = $this->api->reset_sessions();
+            if ( ! is_wp_error( $reset_res ) && ! empty( $reset_res['success'] ) ) {
+                echo '<div class="notice notice-success is-dismissible"><p>✅ El libro digital ha sido reiniciado. Todos los registros de asistencia fueron eliminados.</p></div>';
+            } else {
+                $err_msg = is_wp_error( $reset_res ) ? $reset_res->get_error_message() : ( $reset_res['error'] ?? 'Error desconocido' );
+                echo '<div class="notice notice-error is-dismissible"><p>No se pudieron eliminar los registros: ' . esc_html( $err_msg ) . '</p></div>';
+            }
+        }
+
         // Procesar cierre manual de sesión si fue solicitado por el administrador
         if ( isset( $_GET['action'] ) && $_GET['action'] === 'close_session' && ! empty( $_GET['session_id'] ) ) {
             $target_sid = intval( $_GET['session_id'] );
@@ -314,11 +318,15 @@ class Sence_RCE_Admin_Menu {
         $sessions = $response['sessions'] ?? array();
         $total    = $response['total'] ?? 0;
         $csv_url  = $this->api->export_csv_url();
+        $reset_url = wp_nonce_url( admin_url( 'admin.php?page=sence-rce-sessions&action=reset_sessions' ), 'sence_reset_sessions' );
         ?>
         <div class="wrap sence-rce-wrap">
             <div style="display:flex; justify-content:space-between; align-items:center;">
                 <h1>Registro de Asistencias (Libro Digital SENCE)</h1>
-                <a href="<?php echo esc_url( $csv_url ); ?>" class="button button-primary" target="_blank">📥 Exportar CSV para SENCE</a>
+                <div style="display:flex; gap:10px;">
+                    <a href="<?php echo esc_url( $csv_url ); ?>" class="button button-primary" target="_blank">📥 Exportar CSV para SENCE</a>
+                    <a href="<?php echo esc_url( $reset_url ); ?>" class="button button-secondary" style="color:#b32d2e; border-color:#b32d2e;" onclick="return confirm('⚠️ ¿Estás seguro de que deseas eliminar permanentemente todos los registros de asistencia del libro digital? Esta acción no se puede deshacer.');">🗑️ Reiniciar Libro de Asistencias</a>
+                </div>
             </div>
 
             <div class="sence-rce-card" style="margin-top:20px;">
@@ -392,61 +400,4 @@ class Sence_RCE_Admin_Menu {
         <?php
     }
 
-    public function render_plan() {
-        $plan_info = $this->api->get_plan();
-        if ( is_wp_error( $plan_info ) || ! is_array( $plan_info ) ) {
-            $plan_info = array();
-        }
-
-        $current = isset( $plan_info['current_plan'] ) && is_array( $plan_info['current_plan'] ) ? $plan_info['current_plan'] : array();
-        $all = isset( $plan_info['all_plans'] ) && is_array( $plan_info['all_plans'] ) ? $plan_info['all_plans'] : array();
-        ?>
-        <div class="wrap sence-rce-wrap">
-            <h1>Tu Plan SaaS SENCE RCE</h1>
-            <div class="sence-rce-card">
-                <h2>Plan Actual: <span style="color:#0073aa;"><?php echo esc_html( $current['name'] ?? 'Starter' ); ?></span></h2>
-                <p>Capacidad máxima de cursos: <strong><?php echo ( isset( $current['max_courses'] ) && $current['max_courses'] === -1 ) ? 'Ilimitados' : esc_html( $current['max_courses'] ?? 5 ); ?></strong></p>
-                <p>Límite mensual de sesiones: <strong><?php echo ( isset( $current['max_sessions_month'] ) && $current['max_sessions_month'] === -1 ) ? 'Ilimitadas' : esc_html( $current['max_sessions_month'] ?? 500 ); ?></strong></p>
-            </div>
-
-            <h2>Planes Disponibles</h2>
-            <div class="sence-rce-plans-grid">
-                <?php if ( ! empty( $all ) ) : foreach ( $all as $p ) : ?>
-                <div class="sence-rce-plan-card <?php echo ( $current['id'] ?? '' ) === ( $p['id'] ?? '' ) ? 'current' : ''; ?>">
-                    <h3><?php echo esc_html( $p['name'] ?? 'Plan' ); ?></h3>
-                    <div class="plan-price"><?php echo isset( $p['price_clp'] ) && $p['price_clp'] > 0 ? '$' . number_format( $p['price_clp'], 0, ',', '.' ) . ' CLP/mes' : ( isset( $p['price_clp'] ) && $p['price_clp'] === 0 ? 'Gratis' : 'A convenir' ); ?></div>
-                    <ul class="plan-features">
-                        <li>📚 <?php echo ( isset( $p['max_courses'] ) && $p['max_courses'] === -1 ) ? 'Cursos ilimitados' : 'Hasta ' . ( $p['max_courses'] ?? 1 ) . ' cursos'; ?></li>
-                        <li>👥 <?php echo ( isset( $p['max_sessions_month'] ) && $p['max_sessions_month'] === -1 ) ? 'Sesiones ilimitadas' : 'Hasta ' . ( $p['max_sessions_month'] ?? 50 ) . ' asistencias/mes'; ?></li>
-                        <li>🛡️ Clave Única & SENCE RCE</li>
-                        <li>📊 Reportes y Exportación CSV</li>
-                    </ul>
-                    <?php if ( ( $current['id'] ?? '' ) === ( $p['id'] ?? '' ) ) : ?>
-                        <span class="button button-disabled">Plan Activo</span>
-                    <?php else : ?>
-                        <a href="https://webunica.cl/contacto" target="_blank" class="button button-primary">Contactar para Actualizar</a>
-                    <?php endif; ?>
-                </div>
-                <?php endforeach; endif; ?>
-            </div>
-        </div>
-        <?php
-    }
-
-    /**
-     * Formatea un timestamp ISO a la hora oficial de Chile (America/Santiago)
-     */
-    private function format_chile_datetime( $datetime_str ) {
-        if ( empty( $datetime_str ) ) {
-            return '-';
-        }
-        try {
-            $tz = new DateTimeZone( 'America/Santiago' );
-            $dt = new DateTime( $datetime_str );
-            $dt->setTimezone( $tz );
-            return $dt->format( 'd/m/Y H:i:s' );
-        } catch ( Exception $e ) {
-            return $datetime_str;
-        }
-    }
 }

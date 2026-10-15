@@ -107,9 +107,24 @@ class Sence_RCE_Content_Locker {
 
         if ( $has_session ) {
             return $feedback . $this->render_close_session_form( $user_id, $course_id, $status );
-        } else {
-            return $feedback . $this->render_login_form( $user_id, $course_id, $status );
         }
+
+        // Fuera del rango de fechas del curso: no se permite iniciar asistencia
+        $access_state = $config['access_state'] ?? 'open';
+        if ( 'not_started' === $access_state || 'ended' === $access_state ) {
+            $fmt = function ( $d ) {
+                $ts = $d ? strtotime( $d ) : false;
+                return $ts ? date_i18n( 'd-m-Y', $ts ) : '';
+            };
+            if ( 'not_started' === $access_state ) {
+                $msg = 'Este curso aún no ha comenzado. Fecha de inicio: <strong>' . esc_html( $fmt( $config['fecha_inicio'] ?? '' ) ) . '</strong>.';
+            } else {
+                $msg = 'Este curso ya finalizó el <strong>' . esc_html( $fmt( $config['fecha_termino'] ?? '' ) ) . '</strong>. Ya no es posible registrar asistencia.';
+            }
+            return $feedback . '<div class="sence-rce-card sence-rce-warning"><h4>📅 Fuera del período del curso</h4><p>' . $msg . '</p></div>';
+        }
+
+        return $feedback . $this->render_login_form( $user_id, $course_id, $status );
     }
 
     /**

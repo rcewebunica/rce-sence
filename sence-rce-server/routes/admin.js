@@ -2,7 +2,6 @@ const express = require('express');
 const router = express.Router();
 const crypto = require('crypto');
 const { supabase } = require('../lib/supabase');
-const { PLANS } = require('../lib/plans');
 
 /**
  * Middleware para validar Master Key en endpoints API del admin
@@ -84,8 +83,7 @@ router.get('/api/otecs', checkMasterKey, async (req, res) => {
     const enriched = (otecs || []).map(o => ({
       ...o,
       courses_count: coursesMap[o.id] || 0,
-      sessions_this_month: sessionsMap[o.id] || 0,
-      plan_details: PLANS[o.plan] || PLANS.starter
+      sessions_this_month: sessionsMap[o.id] || 0
     }));
 
     res.json({
@@ -114,7 +112,6 @@ router.post('/api/otecs', checkMasterKey, async (req, res) => {
       rut_otec,
       email,
       telefono,
-      plan = 'starter',
       token_sence = '',
       test_env = true,
       notes = '',
@@ -138,7 +135,6 @@ router.post('/api/otecs', checkMasterKey, async (req, res) => {
       rut_otec: cleanRut,
       email: email.trim().toLowerCase(),
       telefono: telefono ? telefono.trim() : null,
-      plan: ['starter', 'pro', 'enterprise'].includes(plan) ? plan : 'starter',
       token_sence: token_sence ? token_sence.trim() : null,
       test_env: Boolean(test_env),
       notes: notes ? notes.trim() : null,
@@ -201,37 +197,6 @@ router.patch('/api/otecs/:id/toggle', checkMasterKey, async (req, res) => {
     res.json({ success: true, is_active: nextState, otec: updated });
   } catch (err) {
     console.error('Error en toggle OTEC:', err);
-    res.status(500).json({ error: 'Error interno.' });
-  }
-});
-
-/**
- * PATCH /admin/api/otecs/:id/plan
- * Cambia el plan de una OTEC
- */
-router.patch('/api/otecs/:id/plan', checkMasterKey, async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { plan } = req.body;
-
-    if (!['starter', 'pro', 'enterprise'].includes(plan)) {
-      return res.status(400).json({ error: 'Plan inválido.' });
-    }
-
-    const { data: updated, error } = await supabase
-      .from('otecs')
-      .update({ plan })
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      return res.status(500).json({ error: 'Error al cambiar plan.' });
-    }
-
-    res.json({ success: true, otec: updated });
-  } catch (err) {
-    console.error('Error al cambiar plan:', err);
     res.status(500).json({ error: 'Error interno.' });
   }
 });
@@ -559,7 +524,7 @@ router.get('/', (req, res) => {
         <span style="font-size: 24px;">🇨🇱</span>
         <div>
           <div class="brand-title">SENCE RCE SaaS Master Panel</div>
-          <small style="color: var(--text-muted); font-size: 11px;">Gestión Multi-Tenant de OTECs & Planes</small>
+          <small style="color: var(--text-muted); font-size: 11px;">Gestión Multi-Tenant de OTECs</small>
         </div>
       </div>
       <div style="display: flex; align-items: center; gap: 16px;">
@@ -602,7 +567,6 @@ router.get('/', (req, res) => {
               <th>OTEC / Cliente</th>
               <th>RUT</th>
               <th>Contacto</th>
-              <th>Plan</th>
               <th>API Key (WordPress)</th>
               <th>Estado</th>
               <th>Actividad (Mes)</th>
@@ -634,14 +598,6 @@ router.get('/', (req, res) => {
             <div class="form-group">
               <label>RUT OTEC (sin puntos) *</label>
               <input type="text" id="new_rut" class="form-control" placeholder="76123456-7" required>
-            </div>
-            <div class="form-group">
-              <label>Plan SaaS *</label>
-              <select id="new_plan" class="form-control">
-                <option value="starter">Starter (5 cursos, 500 ses.)</option>
-                <option value="pro">Pro (20 cursos, 2000 ses.)</option>
-                <option value="enterprise">Enterprise (Ilimitado)</option>
-              </select>
             </div>
           </div>
           <div class="grid-2">
@@ -791,13 +747,6 @@ router.get('/', (req, res) => {
             <small style="color:var(--text-muted)">\${o.telefono ? escapeHtml(o.telefono) : '-'}</small>
           </td>
           <td>
-            <select class="form-control" style="padding: 4px 8px; font-size: 11px; font-weight: 700;" onchange="changePlan('\${o.id}', this.value)">
-              <option value="starter" \${o.plan === 'starter' ? 'selected' : ''}>STARTER</option>
-              <option value="pro" \${o.plan === 'pro' ? 'selected' : ''}>PRO</option>
-              <option value="enterprise" \${o.plan === 'enterprise' ? 'selected' : ''}>ENTERPRISE</option>
-            </select>
-          </td>
-          <td>
             <div class="key-box">
               <span>\${escapeHtml(o.api_key.substring(0, 10))}...</span>
               <button class="copy-btn" onclick="copyToClipboard('\${escapeHtml(o.api_key)}', this)">📋 Copiar</button>
@@ -861,19 +810,6 @@ router.get('/', (req, res) => {
       }
     }
 
-    async function changePlan(id, newPlan) {
-      try {
-        const res = await fetch(\`/admin/api/otecs/\${id}/plan\`, {
-          method: 'PATCH',
-          headers: { 'Content-Type': 'application/json', 'x-master-key': currentMasterKey },
-          body: JSON.stringify({ plan: newPlan })
-        });
-        if (res.ok) loadData();
-      } catch (e) {
-        alert('Error al actualizar plan');
-      }
-    }
-
     async function regenerateKey(id) {
       if (!confirm('¿Seguro que deseas regenerar la API Key? La clave actual dejará de funcionar en WordPress.')) return;
       try {
@@ -922,7 +858,6 @@ router.get('/', (req, res) => {
       const payload = {
         nombre: document.getElementById('new_nombre').value,
         rut_otec: document.getElementById('new_rut').value,
-        plan: document.getElementById('new_plan').value,
         email: document.getElementById('new_email').value,
         telefono: document.getElementById('new_telefono').value,
         token_sence: document.getElementById('new_token').value,
