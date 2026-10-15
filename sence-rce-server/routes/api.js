@@ -143,7 +143,8 @@ router.post('/course/upsert', async (req, res) => {
       asistencia_obligatoria,
       solicitar_cierre,
       fecha_inicio,
-      fecha_termino
+      fecha_termino,
+      email_respaldo
     } = req.body;
 
     if (!wp_course_id) {
@@ -169,6 +170,7 @@ router.post('/course/upsert', async (req, res) => {
       solicitar_cierre: Boolean(solicitar_cierre),
       fecha_inicio: fechaInicio,
       fecha_termino: fechaTermino,
+      email_respaldo: email_respaldo ? String(email_respaldo).trim() : null,
       is_active: true
     };
 
@@ -181,16 +183,17 @@ router.post('/course/upsert', async (req, res) => {
     if (error) {
       console.error('Error al hacer upsert de curso:', error);
 
-      // Si el error es por falta de las columnas fecha_inicio / fecha_termino en Supabase
-      const isMissingDateColumns =
-        (error.message && (error.message.includes('fecha_inicio') || error.message.includes('fecha_termino'))) ||
+      // Si el error es por falta de columnas opcionales en Supabase
+      const isMissingOptionalColumns =
+        (error.message && (error.message.includes('fecha_inicio') || error.message.includes('fecha_termino') || error.message.includes('email_respaldo'))) ||
         error.code === 'PGRST204';
 
-      if (isMissingDateColumns) {
-        console.warn('Columnas de fecha no existen en Supabase. Reintentando guardar sin fechas...');
+      if (isMissingOptionalColumns) {
+        console.warn('Columnas opcionales no existen en Supabase. Reintentando guardar sin ellas...');
         const fallbackPayload = { ...payload };
         delete fallbackPayload.fecha_inicio;
         delete fallbackPayload.fecha_termino;
+        delete fallbackPayload.email_respaldo;
 
         const retry = await supabase
           .from('courses')
@@ -202,7 +205,7 @@ router.post('/course/upsert', async (req, res) => {
           return res.json({
             success: true,
             course: retry.data,
-            warning: 'La configuración básica se guardó, pero para habilitar las fechas debes ejecutar en Supabase SQL Editor: ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_inicio DATE; ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_termino DATE;'
+            warning: 'La configuración básica se guardó, pero para habilitar fechas y email de respaldo debes ejecutar en Supabase SQL Editor: ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_inicio DATE; ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_termino DATE; ALTER TABLE courses ADD COLUMN IF NOT EXISTS email_respaldo TEXT;'
           });
         }
       }
@@ -396,10 +399,16 @@ router.post('/sessions/reset', async (req, res) => {
 router.get('/sessions/export-csv', async (req, res) => {
   try {
     const otec = req.otec;
-    const { data: sessions, error } = await supabase
+    let query = supabase
       .from('session_summary')
       .select('*')
-      .eq('otec_id', otec.id)
+      .eq('otec_id', otec.id);
+
+    if (req.query.wp_course_id) {
+      query = query.eq('course_id', parseInt(req.query.wp_course_id, 10));
+    }
+
+    const { data: sessions, error } = await query
       .order('session_opened_at', { ascending: false })
       .limit(5000);
 

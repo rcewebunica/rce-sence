@@ -135,14 +135,30 @@ class Sence_RCE_Api_Client {
     /**
      * Genera URL de descarga directa de CSV
      */
-    public function export_csv_url() {
+    public function export_csv_url( $wp_course_id = 0 ) {
         if ( empty( $this->server_url ) || empty( $this->api_key ) ) {
             return '#';
         }
-        return add_query_arg(
-            array( 'api_key' => $this->api_key ),
-            $this->server_url . '/api/sessions/export-csv'
-        );
+        $args = array( 'api_key' => $this->api_key );
+        if ( ! empty( $wp_course_id ) ) {
+            $args['wp_course_id'] = intval( $wp_course_id );
+        }
+        return add_query_arg( $args, $this->server_url . '/api/sessions/export-csv' );
+    }
+
+    /**
+     * Descarga el contenido CSV directamente para adjuntarlo por correo
+     */
+    public function download_csv_content( $wp_course_id = 0 ) {
+        $url = $this->export_csv_url( $wp_course_id );
+        if ( '#' === $url ) {
+            return false;
+        }
+        $res = wp_remote_get( $url, array( 'timeout' => 30, 'sslverify' => false ) );
+        if ( is_wp_error( $res ) || wp_remote_retrieve_response_code( $res ) !== 200 ) {
+            return false;
+        }
+        return wp_remote_retrieve_body( $res );
     }
 
     /**

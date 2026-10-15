@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS courses (
   solicitar_cierre       BOOLEAN DEFAULT FALSE,
   fecha_inicio           DATE,
   fecha_termino          DATE,
+  email_respaldo         TEXT,
   is_active              BOOLEAN DEFAULT TRUE,
   created_at             TIMESTAMPTZ DEFAULT NOW(),
   updated_at             TIMESTAMPTZ DEFAULT NOW(),

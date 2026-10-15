@@ -7,7 +7,8 @@
 
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_inicio  DATE;
 ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_termino DATE;
+ALTER TABLE courses ADD COLUMN IF NOT EXISTS email_respaldo TEXT;
 
--- Borra TODAS las asistencias registradas hasta ahora (irreversible)
-DELETE FROM sessions;
-DELETE FROM usage_log;
+-- Borra TODAS las asistencias registradas hasta ahora (opcional si se desea reiniciar en blanco)
+-- DELETE FROM sessions;
+-- DELETE FROM usage_log;

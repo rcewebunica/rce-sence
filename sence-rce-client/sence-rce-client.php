@@ -2,7 +2,7 @@
 /**
  * Plugin Name: SENCE RCE — Asistencia e-Learning (Cloud SaaS)
  * Description: Integración con SENCE RCE mediante servidor central Railway + Supabase. Control de asistencia obligatorio para cursos Tutor LMS.
- * Version: 2.3.1
+ * Version: 2.4.0
  * Author: Webunica Chile
  * Text Domain: sence-rce
  * Requires PHP: 7.4
@@ -12,7 +12,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SENCE_RCE_VERSION', '2.3.1' );
+define( 'SENCE_RCE_VERSION', '2.4.0' );
 define( 'SENCE_RCE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SENCE_RCE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -46,6 +46,12 @@ class Sence_RCE_Client {
         add_action( 'admin_init', array( $this->settings, 'register_settings' ) );
         add_action( 'admin_enqueue_scripts', array( $this->admin_menu, 'enqueue_admin_assets' ) );
         add_action( 'admin_notices', array( $this, 'check_configuration_notice' ) );
+
+        // Cron de Respaldo Diario SENCE
+        if ( ! wp_next_scheduled( 'sence_rce_daily_backup_cron' ) ) {
+            wp_schedule_event( strtotime( '23:55:00' ), 'daily', 'sence_rce_daily_backup_cron' );
+        }
+        add_action( 'sence_rce_daily_backup_cron', array( 'Sence_RCE_Admin_Menu', 'run_daily_backup_cron' ) );
 
         // AJAX Test de Conexión
         add_action( 'wp_ajax_sence_rce_test_connection', array( $this->settings, 'ajax_test_connection' ) );

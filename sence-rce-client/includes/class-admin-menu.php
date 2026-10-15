@@ -143,9 +143,24 @@ class Sence_RCE_Admin_Menu {
         $selected_id = isset( $_GET['edit_course'] ) ? intval( $_GET['edit_course'] ) : 0;
         $current_cfg = array();
 
+        // Enviar respaldo de prueba por correo si fue solicitado
+        if ( isset( $_GET['action'] ) && $_GET['action'] === 'send_test_backup' && ! empty( $_GET['edit_course'] ) ) {
+            $c_id = intval( $_GET['edit_course'] );
+            check_admin_referer( 'sence_test_backup_' . $c_id );
+            $send_res = self::send_course_backup_email( $c_id, $this->api );
+            if ( $send_res['success'] ) {
+                echo '<div class="notice notice-success is-dismissible"><p>✅ ' . esc_html( $send_res['message'] ) . '</p></div>';
+            } else {
+                echo '<div class="notice notice-error is-dismissible"><p>❌ Error al enviar respaldo: ' . esc_html( $send_res['message'] ) . '</p></div>';
+            }
+        }
+
         // Guardar configuración del curso si se envió el formulario
         if ( isset( $_POST['sence_rce_save_course'] ) && check_admin_referer( 'sence_rce_course_nonce' ) ) {
             $course_id = intval( $_POST['wp_course_id'] );
+            $email_respaldo = sanitize_text_field( $_POST['email_respaldo'] ?? '' );
+            update_post_meta( $course_id, '_sence_email_respaldo', $email_respaldo );
+
             $data = array(
                 'wp_course_id'           => $course_id,
                 'wp_site_url'            => home_url(),
@@ -157,6 +172,7 @@ class Sence_RCE_Admin_Menu {
                 'solicitar_cierre'       => ! empty( $_POST['solicitar_cierre'] ) ? 1 : 0,
                 'fecha_inicio'           => sanitize_text_field( $_POST['fecha_inicio'] ?? '' ),
                 'fecha_termino'          => sanitize_text_field( $_POST['fecha_termino'] ?? '' ),
+                'email_respaldo'         => $email_respaldo,
             );
 
             delete_transient( 'sence_cfg_' . $course_id );
@@ -257,6 +273,23 @@ class Sence_RCE_Admin_Menu {
                                 <td>
                                     <input type="date" name="fecha_termino" value="<?php echo esc_attr( $current_cfg['fecha_termino'] ?? '' ); ?>">
                                     <p class="description">Hasta esta fecha (inclusive). Después no se podrá registrar asistencia. Vacío = sin restricción.</p>
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Email(s) Respaldo Diario</th>
+                                <td>
+                                    <?php 
+                                    $saved_email = $current_cfg['email_respaldo'] ?? get_post_meta( $selected_id, '_sence_email_respaldo', true );
+                                    ?>
+                                    <input type="text" name="email_respaldo" value="<?php echo esc_attr( $saved_email ); ?>" class="regular-text" placeholder="admin@otec.cl, supervisor@otec.cl">
+                                    <p class="description">Correo(s) separados por coma donde se auto-enviará cada noche (23:55 hrs) el Libro Digital de Asistencias en formato CSV como respaldo oficial SENCE.</p>
+                                    <?php if ( ! empty( $saved_email ) ) : 
+                                        $test_mail_url = wp_nonce_url( admin_url( 'admin.php?page=sence-rce-courses&edit_course=' . $selected_id . '&action=send_test_backup' ), 'sence_test_backup_' . $selected_id );
+                                    ?>
+                                        <p style="margin-top:8px;">
+                                            <a href="<?php echo esc_url( $test_mail_url ); ?>" class="button button-small">📤 Enviar Respaldo de Prueba Ahora</a>
+                                        </p>
+                                    <?php endif; ?>
                                 </td>
                             </tr>
                             <tr>
@@ -438,6 +471,126 @@ class Sence_RCE_Admin_Menu {
             </div>
         </div>
         <?php
+    }
+
+    /**
+     * Envía el correo de respaldo del Libro de Asistencia SENCE para un curso específico
+     */
+    public static function send_course_backup_email( $course_id, $api = null ) {
+        if ( ! $api ) {
+            $api = new Sence_RCE_Api_Client();
+        }
+
+        $email_respaldo = get_post_meta( $course_id, '_sence_email_respaldo', true );
+        if ( empty( $email_respaldo ) ) {
+            $cfg = $api->get_course_config( $course_id );
+            $email_respaldo = $cfg['email_respaldo'] ?? '';
+        }
+
+        if ( empty( $email_respaldo ) ) {
+            return array( 'success' => false, 'message' => 'El curso no tiene configurado un correo de respaldo.' );
+        }
+
+        // Descargar CSV oficial desde el servidor central
+        $csv_data = $api->download_csv_content( $course_id );
+        if ( false === $csv_data || empty( $csv_data ) ) {
+            return array( 'success' => false, 'message' => 'No se pudo obtener el archivo CSV de asistencias desde el servidor.' );
+        }
+
+        // Guardar archivo temporal para adjuntar
+        $upload_dir = wp_upload_dir();
+        $safe_title = sanitize_file_name( get_the_title( $course_id ) );
+        $filename   = 'Respaldo_SENCE_' . $course_id . '_' . date( 'Y-m-d' ) . '.csv';
+        $temp_path  = trailingslashit( $upload_dir['basedir'] ) . $filename;
+
+        file_put_contents( $temp_path, $csv_data );
+
+        // Preparar destinatarios (separados por coma o punto y coma)
+        $raw_emails = preg_split( '/[,;]+/', $email_respaldo );
+        $recipients = array();
+        foreach ( $raw_emails as $em ) {
+            $clean = sanitize_email( trim( $em ) );
+            if ( is_email( $clean ) ) {
+                $recipients[] = $clean;
+            }
+        }
+
+        if ( empty( $recipients ) ) {
+            if ( file_exists( $temp_path ) ) {
+                unlink( $temp_path );
+            }
+            return array( 'success' => false, 'message' => 'Los correos configurados no tienen un formato válido.' );
+        }
+
+        // Contar asistencias en el CSV (descontando header)
+        $lines = explode( "\n", trim( $csv_data ) );
+        $total_records = max( 0, count( $lines ) - 1 );
+
+        $course_title = get_the_title( $course_id );
+        $site_name    = get_bloginfo( 'name' );
+        $date_now     = date_i18n( 'd/m/Y H:i' );
+
+        $subject = "🇨🇱 [Respaldo SENCE] Libro Digital de Asistencia - {$course_title} ({$date_now})";
+
+        $body  = "<h2>🇨🇱 Respaldo Oficial Libro de Asistencia SENCE RCE</h2>";
+        $body .= "<p>Se ha generado el respaldo diario automático de asistencias para el curso indicado:</p>";
+        $body .= "<table style='border-collapse:collapse; width:100%; max-width:600px; font-family:sans-serif;'>";
+        $body .= "<tr style='background:#f6f7f7;'><td style='padding:8px; border:1px solid #ccd0d4;'><strong>Plataforma:</strong></td><td style='padding:8px; border:1px solid #ccd0d4;'>" . esc_html( $site_name ) . "</td></tr>";
+        $body .= "<tr><td style='padding:8px; border:1px solid #ccd0d4;'><strong>Curso:</strong></td><td style='padding:8px; border:1px solid #ccd0d4;'>" . esc_html( $course_title ) . " (ID: {$course_id})</td></tr>";
+        $body .= "<tr style='background:#f6f7f7;'><td style='padding:8px; border:1px solid #ccd0d4;'><strong>Fecha del Reporte:</strong></td><td style='padding:8px; border:1px solid #ccd0d4;'>{$date_now} hrs (Chile)</td></tr>";
+        $body .= "<tr><td style='padding:8px; border:1px solid #ccd0d4;'><strong>Registros en Archivo:</strong></td><td style='padding:8px; border:1px solid #ccd0d4;'><strong>{$total_records}</strong> registros de asistencia</td></tr>";
+        $body .= "</table>";
+        $body .= "<p style='margin-top:15px; color:#50575e;'><em>Adjunto a este correo encontrará el archivo oficial <strong>{$filename}</strong> compatible con la planilla de fiscalización SENCE.</em></p>";
+        $body .= "<hr style='border:0; border-top:1px solid #e2e8f0; margin-top:20px;'><small style='color:#8c8f94;'>Generado automáticamente por SENCE RCE Cloud SaaS.</small>";
+
+        $headers = array(
+            'Content-Type: text/html; charset=UTF-8',
+            'From: ' . $site_name . ' <' . get_option( 'admin_email' ) . '>'
+        );
+
+        $sent = wp_mail( $recipients, $subject, $body, $headers, array( $temp_path ) );
+
+        if ( file_exists( $temp_path ) ) {
+            unlink( $temp_path );
+        }
+
+        if ( $sent ) {
+            return array(
+                'success' => true,
+                'message' => 'Respaldo enviado exitosamente a: ' . implode( ', ', $recipients ) . ' (' . $total_records . ' registros adjuntos).'
+            );
+        } else {
+            return array(
+                'success' => false,
+                'message' => 'wp_mail() no pudo despachar el correo. Verifique la configuración SMTP de su WordPress.'
+            );
+        }
+    }
+
+    /**
+     * Tarea programada (WP-Cron) para despacho automático diario
+     */
+    public static function run_daily_backup_cron() {
+        $cpt = function_exists( 'tutor' ) ? tutor()->course_post_type : 'courses';
+        $courses = get_posts( array(
+            'post_type'      => array( $cpt, 'course' ),
+            'post_status'    => 'publish',
+            'posts_per_page' => -1,
+            'fields'         => 'ids'
+        ) );
+
+        $api = new Sence_RCE_Api_Client();
+        foreach ( $courses as $course_id ) {
+            $email = get_post_meta( $course_id, '_sence_email_respaldo', true );
+            if ( empty( $email ) ) {
+                $cfg = $api->get_course_config( $course_id );
+                $email = $cfg['email_respaldo'] ?? '';
+            }
+
+            if ( ! empty( $email ) ) {
+                self::send_course_backup_email( $course_id, $api );
+            }
+        }
     }
 
 }
