@@ -162,7 +162,11 @@ class Sence_RCE_Admin_Menu {
             delete_transient( 'sence_cfg_' . $course_id );
             $res = $this->api->upsert_course( $data );
             if ( ! is_wp_error( $res ) ) {
-                echo '<div class="notice notice-success is-dismissible"><p>Configuración del curso guardada y sincronizada con el backend central.</p></div>';
+                if ( ! empty( $res['warning'] ) ) {
+                    echo '<div class="notice notice-warning is-dismissible"><p>' . esc_html( $res['warning'] ) . '</p></div>';
+                } else {
+                    echo '<div class="notice notice-success is-dismissible"><p>Configuración del curso guardada y sincronizada con el backend central.</p></div>';
+                }
                 if ( ! empty( $res['course'] ) && is_array( $res['course'] ) ) {
                     $current_cfg = $res['course'];
                 }

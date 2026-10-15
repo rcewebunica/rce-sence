@@ -172,7 +172,7 @@ router.post('/course/upsert', async (req, res) => {
       is_active: true
     };
 
-    const { data, error } = await supabase
+    let { data, error } = await supabase
       .from('courses')
       .upsert(payload, { onConflict: 'otec_id,wp_course_id,wp_site_url' })
       .select()
@@ -180,7 +180,35 @@ router.post('/course/upsert', async (req, res) => {
 
     if (error) {
       console.error('Error al hacer upsert de curso:', error);
-      return res.status(500).json({ error: 'No se pudo guardar la configuración del curso' });
+
+      // Si el error es por falta de las columnas fecha_inicio / fecha_termino en Supabase
+      const isMissingDateColumns =
+        (error.message && (error.message.includes('fecha_inicio') || error.message.includes('fecha_termino'))) ||
+        error.code === 'PGRST204';
+
+      if (isMissingDateColumns) {
+        console.warn('Columnas de fecha no existen en Supabase. Reintentando guardar sin fechas...');
+        const fallbackPayload = { ...payload };
+        delete fallbackPayload.fecha_inicio;
+        delete fallbackPayload.fecha_termino;
+
+        const retry = await supabase
+          .from('courses')
+          .upsert(fallbackPayload, { onConflict: 'otec_id,wp_course_id,wp_site_url' })
+          .select()
+          .single();
+
+        if (!retry.error) {
+          return res.json({
+            success: true,
+            course: retry.data,
+            warning: 'La configuración básica se guardó, pero para habilitar las fechas debes ejecutar en Supabase SQL Editor: ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_inicio DATE; ALTER TABLE courses ADD COLUMN IF NOT EXISTS fecha_termino DATE;'
+          });
+        }
+      }
+
+      const errMsg = error.message ? `No se pudo guardar en Supabase: ${error.message}` : 'No se pudo guardar la configuración del curso';
+      return res.status(500).json({ error: errMsg });
     }
 
     res.json({ success: true, course: data });
