@@ -359,10 +359,18 @@ router.post('/sessions/close-manual', async (req, res) => {
 /**
  * POST /api/sessions/reset
  * Elimina todos los registros de asistencia de la OTEC (para reiniciar el libro digital en blanco)
+ * Requiere confirmación estricta de seguridad.
  */
 router.post('/sessions/reset', async (req, res) => {
   try {
     const otec = req.otec;
+    const { confirmation_code } = req.body;
+
+    if (confirmation_code !== 'CONFIRMAR_BORRADO_SENCE') {
+      return res.status(400).json({
+        error: 'Código de confirmación de seguridad inválido. Operación cancelada por protección de datos SENCE.'
+      });
+    }
 
     const { error } = await supabase
       .from('sessions')

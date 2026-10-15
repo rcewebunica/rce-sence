@@ -125,9 +125,11 @@ class Sence_RCE_Api_Client {
     /**
      * Elimina todos los registros de asistencias de la OTEC para reiniciar el libro digital
      */
-    public function reset_sessions() {
+    public function reset_sessions( $confirmation_code = 'CONFIRMAR_BORRADO_SENCE' ) {
         delete_transient( 'sence_rce_stats' );
-        return $this->_request( '/api/sessions/reset', 'POST' );
+        return $this->_request( '/api/sessions/reset', 'POST', array(
+            'confirmation_code' => $confirmation_code
+        ) );
     }
 
     /**

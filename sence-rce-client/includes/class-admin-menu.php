@@ -289,15 +289,25 @@ class Sence_RCE_Admin_Menu {
     }
 
     public function render_sessions() {
-        // Procesar vaciado/reinicio del libro de asistencia si fue solicitado por el administrador
-        if ( isset( $_GET['action'] ) && $_GET['action'] === 'reset_sessions' ) {
-            check_admin_referer( 'sence_reset_sessions' );
-            $reset_res = $this->api->reset_sessions();
-            if ( ! is_wp_error( $reset_res ) && ! empty( $reset_res['success'] ) ) {
-                echo '<div class="notice notice-success is-dismissible"><p>✅ El libro digital ha sido reiniciado. Todos los registros de asistencia fueron eliminados.</p></div>';
+        // Procesar vaciado/reinicio del libro de asistencia si fue solicitado por el administrador con confirmación de seguridad
+        if ( isset( $_POST['sence_rce_reset_sessions'] ) ) {
+            check_admin_referer( 'sence_reset_sessions_post', 'sence_reset_nonce' );
+
+            if ( ! current_user_can( 'manage_options' ) ) {
+                wp_die( 'Permisos insuficientes para realizar esta acción.' );
+            }
+
+            $confirm_word = trim( sanitize_text_field( $_POST['confirm_word'] ?? '' ) );
+            if ( strtoupper( $confirm_word ) !== 'ELIMINAR' ) {
+                echo '<div class="notice notice-error is-dismissible"><p>⚠️ La palabra de seguridad no coincide. Operación de reinicio cancelada para proteger los registros oficiales de SENCE.</p></div>';
             } else {
-                $err_msg = is_wp_error( $reset_res ) ? $reset_res->get_error_message() : ( $reset_res['error'] ?? 'Error desconocido' );
-                echo '<div class="notice notice-error is-dismissible"><p>No se pudieron eliminar los registros: ' . esc_html( $err_msg ) . '</p></div>';
+                $reset_res = $this->api->reset_sessions( 'CONFIRMAR_BORRADO_SENCE' );
+                if ( ! is_wp_error( $reset_res ) && ! empty( $reset_res['success'] ) ) {
+                    echo '<div class="notice notice-success is-dismissible"><p>✅ El libro digital ha sido reiniciado. Todos los registros de asistencia fueron eliminados.</p></div>';
+                } else {
+                    $err_msg = is_wp_error( $reset_res ) ? $reset_res->get_error_message() : ( $reset_res['error'] ?? 'Error desconocido' );
+                    echo '<div class="notice notice-error is-dismissible"><p>No se pudieron eliminar los registros: ' . esc_html( $err_msg ) . '</p></div>';
+                }
             }
         }
 
@@ -322,14 +332,40 @@ class Sence_RCE_Admin_Menu {
         $sessions = $response['sessions'] ?? array();
         $total    = $response['total'] ?? 0;
         $csv_url  = $this->api->export_csv_url();
-        $reset_url = wp_nonce_url( admin_url( 'admin.php?page=sence-rce-sessions&action=reset_sessions' ), 'sence_reset_sessions' );
         ?>
         <div class="wrap sence-rce-wrap">
-            <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
                 <h1>Registro de Asistencias (Libro Digital SENCE)</h1>
                 <div style="display:flex; gap:10px;">
                     <a href="<?php echo esc_url( $csv_url ); ?>" class="button button-primary" target="_blank">📥 Exportar CSV para SENCE</a>
-                    <a href="<?php echo esc_url( $reset_url ); ?>" class="button button-secondary" style="color:#b32d2e; border-color:#b32d2e;" onclick="return confirm('⚠️ ¿Estás seguro de que deseas eliminar permanentemente todos los registros de asistencia del libro digital? Esta acción no se puede deshacer.');">🗑️ Reiniciar Libro de Asistencias</a>
+                    <button type="button" class="button button-secondary" style="color:#d63638; border-color:#d63638;" onclick="document.getElementById('sence-reset-modal').style.display='flex';">🔒 Reiniciar Libro de Asistencias</button>
+                </div>
+            </div>
+
+            <!-- Modal de Seguridad Crítica para Reinicio de Asistencias -->
+            <div id="sence-reset-modal" style="display:none; position:fixed; z-index:999999; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.65); align-items:center; justify-content:center;">
+                <div style="background:#fff; border-radius:8px; max-width:540px; width:92%; padding:25px; box-shadow:0 12px 30px rgba(0,0,0,0.35); border-top:6px solid #d63638; box-sizing:border-box;">
+                    <h2 style="color:#d63638; margin-top:0; font-size:18px; display:flex; align-items:center; gap:8px;">
+                        ⚠️ Zona de Seguridad Crítica SENCE
+                    </h2>
+                    <p style="font-size:14px; line-height:1.5; color:#2c3338; margin-bottom:12px;">
+                        Esta acción <strong>eliminará de forma irreversible todos los registros de asistencia</strong> del libro digital de esta OTEC.
+                    </p>
+                    <div style="background:#fcf0f1; border-left:4px solid #d63638; padding:12px 14px; margin-bottom:18px; font-size:13px; line-height:1.5; color:#646970;">
+                        ⚖️ <strong>Advertencia Regulatoria:</strong> La normativa gubernamental de SENCE exige conservar el historial de asistencias de los participantes para auditorías y liquidación de franquicia tributaria. <strong>Asegúrese de haber descargado el respaldo oficial en CSV antes de continuar.</strong>
+                    </div>
+                    <form method="POST" action="">
+                        <?php wp_nonce_field( 'sence_reset_sessions_post', 'sence_reset_nonce' ); ?>
+                        <input type="hidden" name="sence_rce_reset_sessions" value="1">
+                        <label for="sence-confirm-wipe-input" style="display:block; font-size:13px; font-weight:600; margin-bottom:6px; color:#1d2327;">
+                            Para desbloquear el borrado, escriba la palabra <span style="color:#d63638; font-weight:bold; letter-spacing:1px;">ELIMINAR</span>:
+                        </label>
+                        <input type="text" name="confirm_word" id="sence-confirm-wipe-input" class="regular-text" style="width:100%; font-size:15px; font-weight:bold; text-transform:uppercase; letter-spacing:1.5px; padding:6px 10px; margin-bottom:18px; box-sizing:border-box;" placeholder="Escriba ELIMINAR" autocomplete="off" oninput="document.getElementById('btn-confirm-wipe').disabled = (this.value.trim().toUpperCase() !== 'ELIMINAR');">
+                        <div style="display:flex; justify-content:flex-end; gap:10px;">
+                            <button type="button" class="button button-secondary" onclick="document.getElementById('sence-reset-modal').style.display='none'; document.getElementById('sence-confirm-wipe-input').value=''; document.getElementById('btn-confirm-wipe').disabled=true;">Cancelar</button>
+                            <button type="submit" id="btn-confirm-wipe" class="button button-primary" style="background:#d63638; border-color:#b32d2e; font-weight:bold;" disabled>🗑️ Sí, Eliminar Permanentemente</button>
+                        </div>
+                    </form>
                 </div>
             </div>
 
