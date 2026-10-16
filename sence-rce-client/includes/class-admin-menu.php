@@ -56,6 +56,15 @@ class Sence_RCE_Admin_Menu {
             'sence-rce-settings',
             array( $this, 'render_settings' )
         );
+
+        add_submenu_page(
+            'sence-rce',
+            'Logs y Diagnóstico',
+            'Logs y Diagnóstico',
+            'manage_options',
+            'sence-rce-logs',
+            array( $this, 'render_logs' )
+        );
     }
 
     public function enqueue_admin_assets( $hook ) {
@@ -591,6 +600,144 @@ class Sence_RCE_Admin_Menu {
                 self::send_course_backup_email( $course_id, $api );
             }
         }
+    }
+
+    /**
+     * Pantalla de Logs de Auditoría y Diagnóstico de SENCE
+     */
+    public function render_logs() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_die( 'No tienes permisos suficientes para acceder a esta página.' );
+        }
+
+        // Manejar borrado de logs
+        if ( isset( $_POST['sence_clear_logs'] ) && check_admin_referer( 'sence_clear_logs_nonce' ) ) {
+            Sence_RCE_Logger::clear_logs();
+            echo '<div class="notice notice-success is-dismissible"><p>✅ Historial de logs vaciado correctamente.</p></div>';
+        }
+
+        $diagnostics = Sence_RCE_Logger::run_diagnostics();
+        $logs        = Sence_RCE_Logger::get_logs( 100 );
+        ?>
+        <div class="wrap sence-rce-wrap">
+            <h1>📋 SENCE RCE — Registros, Logs y Diagnóstico</h1>
+            <p>Monitoreo técnico de la comunicación con los servidores de SENCE y el servidor central SaaS.</p>
+
+            <!-- Card 1: Diagnóstico de Parámetros Mandatorios SENCE -->
+            <div class="sence-rce-card" style="margin-bottom:24px;">
+                <h3 style="margin-top:0; border-bottom:1px solid #e2e4e7; padding-bottom:10px;">
+                    🔍 Diagnóstico de Parámetros Mandatorios SENCE
+                </h3>
+                <p style="font-size:13px; color:#50575e; margin-bottom:15px;">
+                    El estándar oficial de SENCE (RCE v1.1.5) exige parámetros mandatorios al iniciar sesión con Clave Única. Si alguno de estos campos viaja vacío, SENCE rechaza la solicitud con el mensaje: <em>"El POST tiene uno o más parámetros mandatorios sin información"</em>.
+                </p>
+
+                <table class="wp-list-table widefat fixed striped">
+                    <thead>
+                        <tr>
+                            <th style="width:28%;">Parámetro Mandatorio</th>
+                            <th style="width:15%;">Estado</th>
+                            <th style="width:25%;">Valor Actual</th>
+                            <th>Diagnóstico / Acción requerida</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <?php foreach ( $diagnostics as $key => $d ) : ?>
+                        <tr>
+                            <td><strong><?php echo esc_html( $d['label'] ); ?></strong></td>
+                            <td>
+                                <?php if ( $d['status'] ) : ?>
+                                    <span class="sence-badge success">✓ CORRECTO</span>
+                                <?php else : ?>
+                                    <span class="sence-badge error">⚠️ INCOMPLETO</span>
+                                <?php endif; ?>
+                            </td>
+                            <td><code><?php echo esc_html( $d['value'] ); ?></code></td>
+                            <td style="font-size:13px; color:<?php echo $d['status'] ? '#1e1e1e' : '#d63638'; ?>;">
+                                <?php echo esc_html( $d['detail'] ); ?>
+                                <?php if ( ! $d['status'] ) : ?>
+                                    <br><a href="<?php echo esc_url( admin_url( 'admin.php?page=sence-rce-settings' ) ); ?>" class="button button-small" style="margin-top:4px;">Configurar Parámetro</a>
+                                <?php endif; ?>
+                            </td>
+                        </tr>
+                        <?php endforeach; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Card 2: Historial de Logs de Auditoría -->
+            <div class="sence-rce-card">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e4e7; padding-bottom:10px;">
+                    <h3 style="margin:0;">
+                        📜 Registro de Auditoría en Vivo (Últimos 100 Eventos)
+                    </h3>
+                    <?php if ( ! empty( $logs ) ) : ?>
+                    <form method="POST" action="" onsubmit="return confirm('¿Seguro que deseas vaciar todo el registro de logs?');">
+                        <?php wp_nonce_field( 'sence_clear_logs_nonce' ); ?>
+                        <input type="hidden" name="sence_clear_logs" value="1">
+                        <button type="submit" class="button button-secondary" style="color:#d63638; border-color:#d63638;">
+                            🗑️ Vaciar Historial
+                        </button>
+                    </form>
+                    <?php endif; ?>
+                </div>
+
+                <?php if ( empty( $logs ) ) : ?>
+                    <p style="color:#646970; font-style:italic; padding:15px 0;">
+                        No hay eventos registrados en el log de auditoría todavía. Las llamadas a Clave Única y los callbacks de SENCE se registrarán aquí automáticamente.
+                    </p>
+                <?php else : ?>
+                    <table class="wp-list-table widefat fixed striped">
+                        <thead>
+                            <tr>
+                                <th style="width:160px;">Fecha y Hora (Chile)</th>
+                                <th style="width:110px;">Nivel</th>
+                                <th>Mensaje / Evento</th>
+                                <th style="width:300px;">Detalles Técnicos</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <?php foreach ( $logs as $entry ) :
+                                $lvl = strtolower( $entry['level'] ?? 'info' );
+                                $badge_class = 'secondary';
+                                if ( 'error' === $lvl ) {
+                                    $badge_class = 'error';
+                                } elseif ( 'warning' === $lvl ) {
+                                    $badge_class = 'warning';
+                                } elseif ( 'info' === $lvl ) {
+                                    $badge_class = 'success';
+                                }
+                            ?>
+                            <tr>
+                                <td>
+                                    <?php echo esc_html( $this->format_chile_datetime( $entry['timestamp'] ?? '' ) ); ?>
+                                </td>
+                                <td>
+                                    <span class="sence-badge <?php echo esc_attr( $badge_class ); ?>">
+                                        <?php echo esc_html( strtoupper( $lvl ) ); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong><?php echo esc_html( $entry['message'] ?? '-' ); ?></strong>
+                                </td>
+                                <td>
+                                    <?php if ( ! empty( $entry['context'] ) ) : ?>
+                                        <details style="font-size:12px; cursor:pointer;">
+                                            <summary style="color:#2271b1; outline:none;">Ver datos enviados/recibidos</summary>
+                                            <pre style="background:#f6f7f7; padding:8px; border-radius:4px; font-size:11px; overflow-x:auto; margin-top:5px; border:1px solid #dcdcde;"><?php echo esc_html( wp_json_encode( $entry['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ); ?></pre>
+                                        </details>
+                                    <?php else : ?>
+                                        <span style="color:#8c8f94;">-</span>
+                                    <?php endif; ?>
+                                </td>
+                            </tr>
+                            <?php endforeach; ?>
+                        </tbody>
+                    </table>
+                <?php endif; ?>
+            </div>
+        </div>
+        <?php
     }
 
     /**

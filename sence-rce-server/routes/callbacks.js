@@ -292,9 +292,20 @@ router.post('/close', async (req, res) => {
 router.post('/error', async (req, res) => {
   try {
     const wpRetoma = req.query.wp_retoma || '/';
+    const otecApiKey = req.query.otec_api_key;
     const { GlosaError, IdSesionAlumno } = req.body;
 
     console.warn(`[SENCE Callback Error] GlosaError recibido: ${GlosaError}, Sesión: ${IdSesionAlumno}`);
+
+    let otecId = null;
+    if (otecApiKey) {
+      const { data: otec } = await supabase
+        .from('otecs')
+        .select('id')
+        .eq('api_key', otecApiKey)
+        .single();
+      if (otec) otecId = otec.id;
+    }
 
     if (IdSesionAlumno) {
       await supabase
@@ -304,6 +315,20 @@ router.post('/error', async (req, res) => {
           is_active: false
         })
         .eq('id_sesion_alumno', IdSesionAlumno);
+    }
+
+    if (otecId) {
+      await supabase.from('usage_log').insert({
+        otec_id: otecId,
+        event_type: 'sence_error_callback',
+        metadata: {
+          glosa_error: GlosaError || 'UNKNOWN_ERROR',
+          id_sesion_alumno: IdSesionAlumno || null,
+          wp_course_id: req.query.sence_course_id || null,
+          body: req.body,
+          query: req.query
+        }
+      });
     }
 
     const redirectUrl = buildRedirectUrl(wpRetoma, {

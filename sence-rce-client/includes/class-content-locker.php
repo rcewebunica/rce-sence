@@ -149,6 +149,39 @@ class Sence_RCE_Content_Locker {
             </div>';
         }
 
+        // Validación previa de parámetros mandatorios SENCE para evitar Error 200 de SENCE
+        $validation_errors = Sence_RCE_Logger::validate_sence_post_params( $course_id, $config, $user_id );
+        if ( ! empty( $validation_errors ) ) {
+            Sence_RCE_Logger::log( 'warning', 'Intento de inicio de sesión SENCE bloqueado: faltan parámetros mandatorios', array(
+                'course_id' => $course_id,
+                'user_id'   => $user_id,
+                'faltantes' => $validation_errors,
+            ) );
+
+            if ( current_user_can( 'manage_options' ) ) {
+                $err_html = '<div class="sence-rce-card" style="border-left: 4px solid #d63638; background: #fff8e5; padding: 16px; margin-bottom: 20px;">
+                    <h4 style="color:#d63638; margin-top:0;">⚠️ Alerta de Configuración SENCE (Solo visible para Administradores)</h4>
+                    <p style="font-size:13px; color:#555;">El inicio de sesión con Clave Única fallará ante los servidores de SENCE con el <strong>Error: "El POST tiene uno o más parámetros mandatorios sin información"</strong> porque faltan los siguientes datos:</p>
+                    <ul style="color:#b32d2e; font-size:13px; margin: 8px 0 12px 20px; list-style-type: disc;">';
+                foreach ( $validation_errors as $param_name => $msg ) {
+                    $err_html .= '<li><strong>' . esc_html( $param_name ) . ':</strong> ' . esc_html( $msg ) . '</li>';
+                }
+                $err_html .= '</ul>
+                    <div style="font-size:12px; margin-top:10px;">
+                        <a href="' . esc_url( admin_url( 'admin.php?page=sence-rce-settings' ) ) . '" class="button button-secondary" style="margin-right:8px;">⚙️ Ajustes SENCE RCE</a>
+                        <a href="' . esc_url( admin_url( 'admin.php?page=sence-rce-courses&edit_course=' . $course_id ) ) . '" class="button button-secondary" style="margin-right:8px;">✏️ Editar este Curso</a>
+                        <a href="' . esc_url( admin_url( 'admin.php?page=sence-rce-logs' ) ) . '" class="button button-secondary">📋 Ver Logs</a>
+                    </div>
+                </div>';
+                return $err_html;
+            } else {
+                return '<div class="sence-rce-card sence-rce-warning">
+                    <h4>⚠️ Asistencia SENCE en Configuración</h4>
+                    <p>La configuración técnica de asistencia para este curso aún no ha sido completada por la administración del OTEC. Por favor comuníquese con la administración.</p>
+                </div>';
+            }
+        }
+
         // Endpoint SENCE o Mock
         $target_action = $test_env
             ? $server_url . '/mock/rce/Registro/IniciarSesion'
@@ -176,6 +209,18 @@ class Sence_RCE_Content_Locker {
         // Para Línea 1 (Programas Sociales) CodSence debe ir vacío
         $cod_sence = ( $linea === 1 ) ? '' : ( $config['codigo_sence'] ?? '' );
         $codigo_curso = $config['codigo_curso'] ?? ( $test_env ? '-1' : '' );
+
+        // Registrar en log la preparación del formulario
+        Sence_RCE_Logger::log( 'info', 'Formulario de inicio de asistencia generado para alumno ' . $run, array(
+            'course_id'    => $course_id,
+            'user_id'      => $user_id,
+            'run_alumno'   => $run,
+            'rut_otec'     => $rut_otec,
+            'linea'        => $linea,
+            'cod_sence'    => $cod_sence,
+            'codigo_curso' => $codigo_curso,
+            'target'       => $target_action,
+        ) );
 
         ob_start();
         ?>
@@ -321,12 +366,22 @@ class Sence_RCE_Content_Locker {
      */
     private function render_url_feedback() {
         if ( isset( $_GET['sence_success'] ) ) {
+            Sence_RCE_Logger::log( 'info', 'Asistencia validada con éxito por SENCE', array(
+                'user_id' => get_current_user_id(),
+                'params'  => $_GET,
+            ) );
+
             return '<div class="sence-rce-notice success">
                 ✅ <strong>¡Asistencia registrada con éxito!</strong> Ya puedes continuar con tus lecciones.
             </div>';
         }
 
         if ( isset( $_GET['sence_closed'] ) ) {
+            Sence_RCE_Logger::log( 'info', 'Sesión de asistencia SENCE cerrada con éxito', array(
+                'user_id' => get_current_user_id(),
+                'params'  => $_GET,
+            ) );
+
             return '<div class="sence-rce-notice info">
                 ⏹️ <strong>Sesión SENCE cerrada correctamente.</strong> Tu tiempo de asistencia ha sido guardado.
             </div>';
@@ -337,8 +392,19 @@ class Sence_RCE_Content_Locker {
             $error_dict = sence_rce_get_error_codes();
             $msg = $error_dict[ $error_code ] ?? "Ocurrió un error al validar su asistencia con SENCE (Código {$error_code}).";
 
+            Sence_RCE_Logger::log( 'error', 'Error recibido en retorno desde SENCE: ' . $error_code, array(
+                'user_id'    => get_current_user_id(),
+                'error_code' => $error_code,
+                'glosa'      => $msg,
+                'params'     => $_GET,
+            ) );
+
+            $admin_link = current_user_can( 'manage_options' )
+                ? ' <div style="margin-top:8px; font-size:12px;"><a href="' . esc_url( admin_url( 'admin.php?page=sence-rce-logs' ) ) . '" class="button button-secondary">📋 Ver Registro de Logs y Diagnóstico</a></div>'
+                : '';
+
             return '<div class="sence-rce-notice danger">
-                ❌ <strong>Error SENCE:</strong> ' . esc_html( $msg ) . '
+                ❌ <strong>Error SENCE:</strong> ' . esc_html( $msg ) . $admin_link . '
             </div>';
         }
 
