@@ -593,4 +593,21 @@ class Sence_RCE_Admin_Menu {
         }
     }
 
+    /**
+     * Formatea un timestamp ISO a la hora oficial de Chile (America/Santiago)
+     */
+    private function format_chile_datetime( $datetime_str ) {
+        if ( empty( $datetime_str ) ) {
+            return '-';
+        }
+        try {
+            $tz = new DateTimeZone( 'America/Santiago' );
+            $dt = new DateTime( $datetime_str );
+            $dt->setTimezone( $tz );
+            return $dt->format( 'd/m/Y H:i:s' );
+        } catch ( Exception $e ) {
+            return $datetime_str;
+        }
+    }
+
 }
