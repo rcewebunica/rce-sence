@@ -222,6 +222,12 @@ class Sence_RCE_Content_Locker {
             'target'       => $target_action,
         ) );
 
+        $user_obj = get_userdata( $user_id );
+        $student_name = $user_obj ? trim( $user_obj->first_name . ' ' . $user_obj->last_name ) : '';
+        if ( empty( $student_name ) && $user_obj ) {
+            $student_name = $user_obj->display_name;
+        }
+
         ob_start();
         ?>
         <div class="sence-rce-card sence-rce-login">
@@ -230,8 +236,11 @@ class Sence_RCE_Content_Locker {
             </div>
             <div class="sence-rce-body">
                 <p>Para iniciar tu clase y registrar tu asistencia obligatoria, debes autenticarte con tu <strong>Clave Única</strong> del Gobierno de Chile.</p>
-                <div class="sence-rce-student-info">
-                    <span><strong>Alumno:</strong> <?php echo esc_html( $run ); ?></span>
+                <div class="sence-rce-student-info" style="display:flex; flex-direction:column; gap:4px; margin-bottom:15px; background:#f0f6fc; padding:10px 14px; border-radius:6px; border-left:4px solid #2271b1; font-size:13px;">
+                    <?php if ( ! empty( $student_name ) ) : ?>
+                        <span><strong>Alumno:</strong> <?php echo esc_html( $student_name ); ?></span>
+                    <?php endif; ?>
+                    <span><strong>RUT:</strong> <?php echo esc_html( $run ); ?></span>
                 </div>
 
                 <form method="POST" action="<?php echo esc_url( $target_action ); ?>" class="sence-rce-form">

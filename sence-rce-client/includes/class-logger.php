@@ -22,22 +22,47 @@ class Sence_RCE_Logger {
     public static function log( $level, $message, $context = array() ) {
         $level = in_array( strtolower( $level ), array( 'info', 'warning', 'error' ), true ) ? strtolower( $level ) : 'info';
 
-        // Sanitizar contexto para no almacenar passwords o tokens sensibles en texto plano innecesario
+        // Determinar usuario objetivo
+        $user_id = ! empty( $context['user_id'] ) ? intval( $context['user_id'] ) : get_current_user_id();
+        $user_name = 'No autenticado';
+        $user_rut  = '-';
+        $user_email = '-';
+
+        if ( $user_id > 0 ) {
+            $user = get_userdata( $user_id );
+            if ( $user ) {
+                $nombre_completo = trim( $user->first_name . ' ' . $user->last_name );
+                $user_name  = ! empty( $nombre_completo ) ? $nombre_completo : $user->display_name;
+                $user_email = $user->user_email;
+            }
+            $run = Sence_RCE_Rut_Helper::get_user_run( $user_id );
+            if ( ! empty( $run ) ) {
+                $user_rut = $run;
+            }
+        }
+
+        // Sanitizar contexto
         $safe_context = self::sanitize_context( $context );
+        $safe_context['alumno_nombre'] = $user_name;
+        $safe_context['alumno_rut']    = $user_rut;
+        $safe_context['alumno_email']  = $user_email;
 
         $entry = array(
-            'id'        => wp_generate_password( 8, false ),
-            'timestamp' => current_time( 'mysql' ),
-            'level'     => $level,
-            'message'   => sanitize_text_field( $message ),
-            'context'   => $safe_context,
-            'user_id'   => get_current_user_id(),
+            'id'         => wp_generate_password( 8, false ),
+            'timestamp'  => current_time( 'mysql' ),
+            'level'      => $level,
+            'message'    => sanitize_text_field( $message ),
+            'user_id'    => $user_id,
+            'user_name'  => $user_name,
+            'user_rut'   => $user_rut,
+            'user_email' => $user_email,
+            'context'    => $safe_context,
         );
 
         // Guardar en error_log de PHP / WordPress (wp-content/debug.log)
         if ( defined( 'WP_DEBUG' ) && WP_DEBUG ) {
             $context_str = ! empty( $safe_context ) ? ' | ' . wp_json_encode( $safe_context ) : '';
-            error_log( sprintf( '[SENCE RCE %s] %s%s', strtoupper( $level ), $message, $context_str ) );
+            error_log( sprintf( '[SENCE RCE %s] [%s - %s] %s%s', strtoupper( $level ), $user_name, $user_rut, $message, $context_str ) );
         }
 
         // Guardar en la opción de WordPress

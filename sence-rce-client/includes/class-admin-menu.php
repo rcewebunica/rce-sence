@@ -690,10 +690,11 @@ class Sence_RCE_Admin_Menu {
                     <table class="wp-list-table widefat fixed striped">
                         <thead>
                             <tr>
-                                <th style="width:160px;">Fecha y Hora (Chile)</th>
-                                <th style="width:110px;">Nivel</th>
+                                <th style="width:145px;">Fecha y Hora</th>
+                                <th style="width:90px;">Nivel</th>
+                                <th style="width:220px;">Alumno</th>
                                 <th>Mensaje / Evento</th>
-                                <th style="width:300px;">Detalles Técnicos</th>
+                                <th style="width:280px;">Detalles Técnicos</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -707,6 +708,9 @@ class Sence_RCE_Admin_Menu {
                                 } elseif ( 'info' === $lvl ) {
                                     $badge_class = 'success';
                                 }
+                                $u_name = $entry['user_name'] ?? ( $entry['context']['alumno_nombre'] ?? 'No identificado' );
+                                $u_rut  = $entry['user_rut'] ?? ( $entry['context']['alumno_rut'] ?? '-' );
+                                $u_id   = $entry['user_id'] ?? ( $entry['context']['user_id'] ?? 0 );
                             ?>
                             <tr>
                                 <td>
@@ -715,6 +719,15 @@ class Sence_RCE_Admin_Menu {
                                 <td>
                                     <span class="sence-badge <?php echo esc_attr( $badge_class ); ?>">
                                         <?php echo esc_html( strtoupper( $lvl ) ); ?>
+                                    </span>
+                                </td>
+                                <td>
+                                    <strong><?php echo esc_html( $u_name ); ?></strong><br>
+                                    <span style="font-size:12px; color:#50575e;">
+                                        RUT: <code><?php echo esc_html( $u_rut ); ?></code>
+                                        <?php if ( $u_id ) : ?>
+                                            (ID: <?php echo esc_html( $u_id ); ?>)
+                                        <?php endif; ?>
                                     </span>
                                 </td>
                                 <td>
