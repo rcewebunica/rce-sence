@@ -241,7 +241,30 @@ router.get('/sessions', async (req, res) => {
       .eq('otec_id', otec.id);
 
     if (wpCourseId) {
-      query = query.eq('course_id', wpCourseId);
+      const { data: matchedCourses } = await supabase
+        .from('courses')
+        .select('id, codigo_curso')
+        .eq('otec_id', otec.id)
+        .eq('wp_course_id', wpCourseId);
+
+      const targetCourseIds = [wpCourseId];
+      let matchCodCurso = null;
+      if (matchedCourses && matchedCourses.length > 0) {
+        matchedCourses.forEach(c => {
+          if (!targetCourseIds.includes(c.id)) {
+            targetCourseIds.push(c.id);
+          }
+          if (c.codigo_curso) {
+            matchCodCurso = c.codigo_curso;
+          }
+        });
+      }
+
+      if (matchCodCurso) {
+        query = query.or(`course_id.in.(${targetCourseIds.join(',')}),codigo_curso.eq.${matchCodCurso}`);
+      } else {
+        query = query.in('course_id', targetCourseIds);
+      }
     }
 
     if (searchRun) {
@@ -405,7 +428,31 @@ router.get('/sessions/export-csv', async (req, res) => {
       .eq('otec_id', otec.id);
 
     if (req.query.wp_course_id) {
-      query = query.eq('course_id', parseInt(req.query.wp_course_id, 10));
+      const wpCourseId = parseInt(req.query.wp_course_id, 10);
+      const { data: matchedCourses } = await supabase
+        .from('courses')
+        .select('id, codigo_curso')
+        .eq('otec_id', otec.id)
+        .eq('wp_course_id', wpCourseId);
+
+      const targetCourseIds = [wpCourseId];
+      let matchCodCurso = null;
+      if (matchedCourses && matchedCourses.length > 0) {
+        matchedCourses.forEach(c => {
+          if (!targetCourseIds.includes(c.id)) {
+            targetCourseIds.push(c.id);
+          }
+          if (c.codigo_curso) {
+            matchCodCurso = c.codigo_curso;
+          }
+        });
+      }
+
+      if (matchCodCurso) {
+        query = query.or(`course_id.in.(${targetCourseIds.join(',')}),codigo_curso.eq.${matchCodCurso}`);
+      } else {
+        query = query.in('course_id', targetCourseIds);
+      }
     }
 
     const { data: sessions, error } = await query

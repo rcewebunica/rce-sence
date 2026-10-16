@@ -8,6 +8,7 @@ class Sence_RCE_Admin_Menu {
 
     public function __construct( $api_client ) {
         $this->api = $api_client;
+        add_filter( 'admin_footer_text', array( $this, 'custom_admin_footer' ) );
     }
 
     public function add_menu() {
@@ -107,7 +108,7 @@ class Sence_RCE_Admin_Menu {
         $opts = get_option( 'sence_rce_cloud_options', array() );
         ?>
         <div class="wrap sence-rce-wrap">
-            <h1>🇨🇱 SENCE RCE — Panel de Control SaaS</h1>
+            <h1>🇨🇱 SENCE RCE — Panel de Control SaaS <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
 
             <div class="sence-rce-connection-bar <?php echo ! empty( $conn['success'] ) ? 'connected' : 'disconnected'; ?>">
                 <span class="status-indicator"></span>
@@ -144,6 +145,8 @@ class Sence_RCE_Admin_Menu {
                 <p>⚠️ No se pudieron obtener estadísticas del servidor central. Verifique que la URL y la API Key estén correctamente ingresadas en <a href="<?php echo admin_url( 'admin.php?page=sence-rce-settings' ); ?>">Configuración</a>.</p>
             </div>
             <?php endif; ?>
+
+            <?php $this->render_footer_brand(); ?>
         </div>
         <?php
     }
@@ -215,7 +218,7 @@ class Sence_RCE_Admin_Menu {
         }
         ?>
         <div class="wrap sence-rce-wrap">
-            <h1>Configuración SENCE por Curso</h1>
+            <h1>Configuración SENCE por Curso <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
             <div class="sence-rce-two-col">
                 <div class="sence-rce-card">
                     <h3>Cursos en tu Plataforma (<?php echo count( $courses ); ?>)</h3>
@@ -326,6 +329,7 @@ class Sence_RCE_Admin_Menu {
                 </div>
                 <?php endif; ?>
             </div>
+            <?php $this->render_footer_brand(); ?>
         </div>
         <?php
     }
@@ -377,7 +381,7 @@ class Sence_RCE_Admin_Menu {
         ?>
         <div class="wrap sence-rce-wrap">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-                <h1>Registro de Asistencias (Libro Digital SENCE)</h1>
+                <h1>Registro de Asistencias (Libro Digital SENCE) <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
                 <div style="display:flex; gap:10px;">
                     <a href="<?php echo esc_url( $csv_url ); ?>" class="button button-primary" target="_blank">📥 Exportar CSV para SENCE</a>
                     <button type="button" class="button button-secondary" style="color:#d63638; border-color:#d63638;" onclick="document.getElementById('sence-reset-modal').style.display='flex';">🔒 Reiniciar Libro de Asistencias</button>
@@ -456,6 +460,7 @@ class Sence_RCE_Admin_Menu {
                     </tbody>
                 </table>
             </div>
+            <?php $this->render_footer_brand(); ?>
         </div>
         <?php
     }
@@ -463,7 +468,7 @@ class Sence_RCE_Admin_Menu {
     public function render_settings() {
         ?>
         <div class="wrap sence-rce-wrap">
-            <h1>Configuración SENCE RCE Cloud</h1>
+            <h1>Configuración SENCE RCE Cloud <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
             <form method="POST" action="options.php">
                 <?php
                 settings_fields( 'sence_rce_cloud_options_group' );
@@ -478,6 +483,7 @@ class Sence_RCE_Admin_Menu {
                 <button type="button" id="btn-test-connection" class="button button-secondary">⚡ Probar Conexión Ahora</button>
                 <span id="test-connection-result" style="margin-left:15px; font-weight:bold;"></span>
             </div>
+            <?php $this->render_footer_brand(); ?>
         </div>
         <?php
     }
@@ -620,7 +626,7 @@ class Sence_RCE_Admin_Menu {
         $logs        = Sence_RCE_Logger::get_logs( 100 );
         ?>
         <div class="wrap sence-rce-wrap">
-            <h1>📋 SENCE RCE — Registros, Logs y Diagnóstico</h1>
+            <h1>📋 SENCE RCE — Registros, Logs y Diagnóstico <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
             <p>Monitoreo técnico de la comunicación con los servidores de SENCE y el servidor central SaaS.</p>
 
             <!-- Card 1: Diagnóstico de Parámetros Mandatorios SENCE -->
@@ -667,19 +673,27 @@ class Sence_RCE_Admin_Menu {
 
             <!-- Card 2: Historial de Logs de Auditoría -->
             <div class="sence-rce-card">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e4e7; padding-bottom:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; border-bottom:1px solid #e2e4e7; padding-bottom:10px; flex-wrap:wrap; gap:10px;">
                     <h3 style="margin:0;">
                         📜 Registro de Auditoría en Vivo (Últimos 100 Eventos)
                     </h3>
-                    <?php if ( ! empty( $logs ) ) : ?>
-                    <form method="POST" action="" onsubmit="return confirm('¿Seguro que deseas vaciar todo el registro de logs?');">
-                        <?php wp_nonce_field( 'sence_clear_logs_nonce' ); ?>
-                        <input type="hidden" name="sence_clear_logs" value="1">
-                        <button type="submit" class="button button-secondary" style="color:#d63638; border-color:#d63638;">
-                            🗑️ Vaciar Historial
-                        </button>
-                    </form>
-                    <?php endif; ?>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <?php if ( ! empty( $logs ) ) : ?>
+                            <button type="button" class="button button-secondary" onclick="document.querySelectorAll('details.sence-log-details').forEach(function(d){d.open=true;});">
+                                👁️ Expandir Todos
+                            </button>
+                            <button type="button" class="button button-secondary" onclick="document.querySelectorAll('details.sence-log-details').forEach(function(d){d.open=false;});">
+                                📁 Colapsar Todos
+                            </button>
+                            <form method="POST" action="" onsubmit="return confirm('¿Seguro que deseas vaciar todo el registro de logs?');" style="margin:0;">
+                                <?php wp_nonce_field( 'sence_clear_logs_nonce' ); ?>
+                                <input type="hidden" name="sence_clear_logs" value="1">
+                                <button type="submit" class="button button-secondary" style="color:#d63638; border-color:#d63638;">
+                                    🗑️ Vaciar Historial
+                                </button>
+                            </form>
+                        <?php endif; ?>
+                    </div>
                 </div>
 
                 <?php if ( empty( $logs ) ) : ?>
@@ -687,14 +701,14 @@ class Sence_RCE_Admin_Menu {
                         No hay eventos registrados en el log de auditoría todavía. Las llamadas a Clave Única y los callbacks de SENCE se registrarán aquí automáticamente.
                     </p>
                 <?php else : ?>
-                    <table class="wp-list-table widefat fixed striped">
+                    <table class="wp-list-table widefat fixed striped" style="width:100%;">
                         <thead>
                             <tr>
-                                <th style="width:145px;">Fecha y Hora</th>
-                                <th style="width:90px;">Nivel</th>
-                                <th style="width:220px;">Alumno</th>
-                                <th>Mensaje / Evento</th>
-                                <th style="width:280px;">Detalles Técnicos</th>
+                                <th style="width:130px;">Fecha y Hora</th>
+                                <th style="width:75px;">Nivel</th>
+                                <th style="width:180px;">Alumno</th>
+                                <th style="width:230px;">Mensaje / Evento</th>
+                                <th>Datos Enviados y Recibidos (Detalles Técnicos)</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -735,9 +749,9 @@ class Sence_RCE_Admin_Menu {
                                 </td>
                                 <td>
                                     <?php if ( ! empty( $entry['context'] ) ) : ?>
-                                        <details style="font-size:12px; cursor:pointer;">
-                                            <summary style="color:#2271b1; outline:none;">Ver datos enviados/recibidos</summary>
-                                            <pre style="background:#f6f7f7; padding:8px; border-radius:4px; font-size:11px; overflow-x:auto; margin-top:5px; border:1px solid #dcdcde;"><?php echo esc_html( wp_json_encode( $entry['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ); ?></pre>
+                                        <details class="sence-log-details" style="font-size:12px; cursor:pointer;" open>
+                                            <summary style="color:#2271b1; outline:none; font-weight:600; margin-bottom:4px;">Ver datos enviados/recibidos</summary>
+                                            <pre style="background:#1e1e1e; color:#d4d4d4; padding:12px 14px; border-radius:6px; font-size:12px; line-height:1.45; margin-top:4px; border:1px solid #333; white-space:pre-wrap; word-break:break-all; max-height:280px; overflow-y:auto;"><?php echo esc_html( wp_json_encode( $entry['context'], JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE ) ); ?></pre>
                                         </details>
                                     <?php else : ?>
                                         <span style="color:#8c8f94;">-</span>
@@ -748,6 +762,39 @@ class Sence_RCE_Admin_Menu {
                         </tbody>
                     </table>
                 <?php endif; ?>
+            </div>
+
+            <?php $this->render_footer_brand(); ?>
+        </div>
+        <?php
+    }
+
+    /**
+     * Texto personalizado para el pie de página del administrador de WordPress
+     */
+    public function custom_admin_footer( $text ) {
+        $screen = get_current_screen();
+        if ( $screen && strpos( $screen->id, 'sence-rce' ) !== false ) {
+            return '<span><strong>SENCE RCE SaaS</strong> v' . esc_html( SENCE_RCE_VERSION ) . ' | Desarrollado por <a href="https://webunica.cl" target="_blank" rel="noopener">webunica.cl</a></span>';
+        }
+        return $text;
+    }
+
+    /**
+     * Pie de página unificado con marca webunica.cl y versión
+     */
+    private function render_footer_brand() {
+        ?>
+        <div class="sence-rce-footer" style="margin-top:35px; padding:18px 0; border-top:1px solid #dcdcde; display:flex; justify-content:space-between; align-items:center; font-size:13px; color:#646970; flex-wrap:wrap; gap:10px;">
+            <div>
+                <strong>SENCE RCE — Asistencia e-Learning (Cloud SaaS)</strong>
+                <span class="sence-badge secondary" style="margin-left:6px; font-weight:600;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span>
+            </div>
+            <div style="display:flex; align-items:center; gap:8px;">
+                <span>Desarrollado y mantenido por</span>
+                <a href="https://webunica.cl" target="_blank" rel="noopener" style="display:inline-flex; align-items:center; gap:4px; font-weight:700; color:#2271b1; text-decoration:none; font-size:14px;">
+                    🌐 webunica.cl
+                </a>
             </div>
         </div>
         <?php
