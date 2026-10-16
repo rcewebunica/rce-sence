@@ -24,8 +24,15 @@ class Sence_RCE_Content_Locker {
         }
 
         global $post;
-        if ( ! $post ) {
+        if ( ! $post || empty( $post->post_type ) ) {
             return $content;
+        }
+
+        // Solo intervenir si el post actual es un curso o contenido de Tutor LMS
+        $course_cpt = function_exists( 'tutor' ) && isset( tutor()->course_post_type ) ? tutor()->course_post_type : 'courses';
+        $allowed_cpts = array( $course_cpt, 'courses', 'course', 'lesson', 'tutor_lesson', 'tutor_quiz', 'tutor_assignments', 'topics' );
+        if ( ! in_array( $post->post_type, $allowed_cpts, true ) ) {
+            return $content; // Páginas normales de WordPress (Mi Perfil, Carrito, Home) no se bloquean
         }
 
         $course_id = $this->get_course_id_from_post( $post );
@@ -532,6 +539,23 @@ class Sence_RCE_Content_Locker {
             }
         }
 
-        return intval( $post->ID );
+        // 9. Si el post es una lección o evaluación pero no se pudo deducir el curso por jerarquía, buscar en las matrículas del alumno
+        if ( in_array( $post->post_type, array( 'lesson', 'tutor_lesson', 'tutor_quiz', 'tutor_assignments' ), true ) ) {
+            $current_uid = get_current_user_id();
+            if ( $current_uid && function_exists( 'tutor_utils' ) && method_exists( tutor_utils(), 'get_enrolled_courses_by_user' ) ) {
+                $enrolled = tutor_utils()->get_enrolled_courses_by_user( $current_uid );
+                if ( ! empty( $enrolled ) && is_array( $enrolled ) ) {
+                    foreach ( $enrolled as $item ) {
+                        $e_cid = is_object( $item ) ? ( $item->ID ?? $item->course_id ?? 0 ) : ( $item['ID'] ?? 0 );
+                        if ( $e_cid ) {
+                            return intval( $e_cid );
+                        }
+                    }
+                }
+            }
+        }
+
+        // Si no es un curso ni pertenece a un curso, NO es un curso
+        return 0;
     }
 }
