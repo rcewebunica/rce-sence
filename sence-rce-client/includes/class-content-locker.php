@@ -422,7 +422,7 @@ class Sence_RCE_Content_Locker {
         }
 
         // 1. Si el post actual es directamente el curso
-        if ( isset( $post->post_type ) && ( $post->post_type === $course_cpt || $post->post_type === 'courses' ) ) {
+        if ( isset( $post->post_type ) && ( $post->post_type === $course_cpt || $post->post_type === 'courses' || $post->post_type === 'course' ) ) {
             return intval( $post->ID );
         }
 
@@ -432,17 +432,11 @@ class Sence_RCE_Content_Locker {
             return intval( $course->ID );
         }
 
-        // 3. Funciones oficiales de Tutor LMS
+        // 3. Funciones oficiales de Tutor LMS (get_course_id_by_lesson, get_course_id_by_subelement)
         if ( function_exists( 'tutor_utils' ) && is_object( tutor_utils() ) ) {
             try {
-                if ( method_exists( tutor_utils(), 'get_course_id_by' ) ) {
-                    $cid = tutor_utils()->get_course_id_by( 'lesson', $post->ID );
-                    if ( ! $cid ) {
-                        $cid = tutor_utils()->get_course_id_by( 'quiz', $post->ID );
-                    }
-                    if ( ! $cid ) {
-                        $cid = tutor_utils()->get_course_id_by( 'assignment', $post->ID );
-                    }
+                if ( method_exists( tutor_utils(), 'get_course_id_by_lesson' ) ) {
+                    $cid = tutor_utils()->get_course_id_by_lesson( $post->ID );
                     if ( $cid ) {
                         return intval( $cid );
                     }
@@ -454,21 +448,65 @@ class Sence_RCE_Content_Locker {
                         return intval( $cid );
                     }
                 }
+
+                if ( method_exists( tutor_utils(), 'get_course_id_by_content' ) ) {
+                    $cid = tutor_utils()->get_course_id_by_content( $post->ID );
+                    if ( $cid ) {
+                        return intval( $cid );
+                    }
+                }
             } catch ( Throwable $t ) {
                 // Silently fallback
             }
         }
 
-        // 4. Metadatos conocidos de Tutor LMS
-        $meta_keys = array( '_tutor_course_id_for_lesson', '_tutor_course_id', '_course_id' );
-        foreach ( $meta_keys as $mkey ) {
-            $meta_id = get_post_meta( $post->ID, $mkey, true );
-            if ( $meta_id && is_numeric( $meta_id ) ) {
-                return intval( $meta_id );
+        // 4. Parámetros GET en la URL si se navega la lección
+        if ( ! empty( $_GET['course_id'] ) ) {
+            return intval( $_GET['course_id'] );
+        }
+        if ( ! empty( $_GET['tutor_course_id'] ) ) {
+            return intval( $_GET['tutor_course_id'] );
+        }
+
+        // 5. Extracción por slug en la URL (/courses/slug-del-curso/...)
+        $req_uri = $_SERVER['REQUEST_URI'] ?? '';
+        if ( preg_match( '#/courses/([^/?#]+)#', $req_uri, $matches ) ) {
+            $course_slug = sanitize_title( $matches[1] );
+            global $wpdb;
+            $cid_from_slug = $wpdb->get_var( $wpdb->prepare(
+                "SELECT ID FROM {$wpdb->posts} WHERE post_name = %s AND post_type IN (%s, 'courses', 'course') LIMIT 1",
+                $course_slug,
+                $course_cpt
+            ) );
+            if ( $cid_from_slug ) {
+                return intval( $cid_from_slug );
             }
         }
 
-        // 5. Jerarquía de post_parent (Lección -> Tópico/Tema -> Curso)
+        // 6. Base de datos: Metadatos conocidos de Tutor LMS
+        global $wpdb;
+        $meta_cid = $wpdb->get_var( $wpdb->prepare(
+            "SELECT meta_value FROM {$wpdb->postmeta} WHERE post_id = %d AND meta_key IN ('_tutor_course_id_for_lesson', '_tutor_course_id', '_course_id') LIMIT 1",
+            $post->ID
+        ) );
+        if ( $meta_cid && is_numeric( $meta_cid ) && $meta_cid > 0 ) {
+            return intval( $meta_cid );
+        }
+
+        // 7. Base de datos: Jerarquía Lección -> Tópico -> Curso
+        $grandparent = $wpdb->get_var( $wpdb->prepare(
+            "SELECT p2.ID FROM {$wpdb->posts} p1 
+             INNER JOIN {$wpdb->posts} p2 ON p1.post_parent = p2.ID 
+             WHERE p1.ID = (SELECT post_parent FROM {$wpdb->posts} WHERE ID = %d) 
+             AND p2.post_type IN (%s, 'courses', 'course') LIMIT 1",
+            $post->ID,
+            $course_cpt
+        ) );
+        if ( $grandparent ) {
+            return intval( $grandparent );
+        }
+
+        // 8. Jerarquía directa de post_parent
         if ( isset( $post->post_parent ) && $post->post_parent > 0 ) {
             $parent_id = $post->post_parent;
             $safety_counter = 0;
@@ -478,7 +516,7 @@ class Sence_RCE_Content_Locker {
                 if ( ! $parent || ! is_object( $parent ) ) {
                     break;
                 }
-                if ( isset( $parent->post_type ) && ( $parent->post_type === $course_cpt || $parent->post_type === 'courses' ) ) {
+                if ( isset( $parent->post_type ) && ( $parent->post_type === $course_cpt || $parent->post_type === 'courses' || $parent->post_type === 'course' ) ) {
                     return intval( $parent->ID );
                 }
                 $parent_id = $parent->post_parent;
