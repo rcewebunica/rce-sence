@@ -5,9 +5,114 @@
 class Sence_RCE_Content_Locker {
 
     private $api;
+    private $interface_rendered = false;
+    private $feedback_logged    = false;
+    private $form_logged        = false;
 
     public function __construct( $api_client ) {
         $this->api = $api_client;
+    }
+
+    /**
+     * Si el alumno acaba de validar su Clave Única desde la portada del curso (?sence_success=1),
+     * lo redirige automáticamente adentro de su primera lección (o lección actual) del curso.
+     */
+    public function maybe_redirect_to_first_lesson() {
+        if ( ! is_user_logged_in() || is_admin() ) {
+            return;
+        }
+
+        if ( ! isset( $_GET['sence_success'] ) || '1' !== (string) $_GET['sence_success'] ) {
+            return;
+        }
+
+        global $post;
+        if ( ! $post || empty( $post->ID ) || empty( $post->post_type ) ) {
+            return;
+        }
+
+        $course_cpt = function_exists( 'tutor' ) && isset( tutor()->course_post_type ) ? tutor()->course_post_type : 'courses';
+        if ( ! in_array( $post->post_type, array( $course_cpt, 'courses', 'course' ), true ) ) {
+            return; // Ya está dentro de una lección u otro objeto
+        }
+
+        $course_id = intval( $post->ID );
+        $user_id   = get_current_user_id();
+
+        // Limpiar el transient de estado antes de redirigir para que la lección cargue desbloqueada al instante
+        $run = Sence_RCE_Rut_Helper::get_user_run( $user_id );
+        $transient_key = 'sence_stat_' . md5( "{$user_id}_{$course_id}_{$run}" );
+        delete_transient( $transient_key );
+
+        $lesson_url = $this->get_first_lesson_url( $course_id, $user_id );
+        if ( ! empty( $lesson_url ) && $lesson_url !== get_permalink( $course_id ) ) {
+            $redirect_args = array( 'sence_success' => '1' );
+            if ( ! empty( $_GET['id_sesion'] ) ) {
+                $redirect_args['id_sesion'] = sanitize_text_field( $_GET['id_sesion'] );
+            }
+            $target_url = add_query_arg( $redirect_args, $lesson_url );
+            wp_safe_redirect( $target_url );
+            exit;
+        }
+    }
+
+    /**
+     * Obtiene la URL de la primera lección (o lección actual donde quedó el alumno) en Tutor LMS
+     */
+    private function get_first_lesson_url( $course_id, $user_id ) {
+        if ( ! $course_id || ! $user_id ) {
+            return '';
+        }
+
+        // 1. Vía funciones nativas de Tutor LMS (solo si el alumno está matriculado o es admin)
+        if ( function_exists( 'tutor_utils' ) && is_object( tutor_utils() ) ) {
+            $is_enrolled = method_exists( tutor_utils(), 'is_enrolled' )
+                ? tutor_utils()->is_enrolled( $course_id, $user_id )
+                : true;
+
+            if ( $is_enrolled || current_user_can( 'administrator' ) ) {
+                if ( method_exists( tutor_utils(), 'get_course_first_lesson' ) ) {
+                    $first_url = tutor_utils()->get_course_first_lesson( $course_id );
+                    if ( ! empty( $first_url ) && is_string( $first_url ) && filter_var( $first_url, FILTER_VALIDATE_URL ) ) {
+                        return $first_url;
+                    }
+                }
+            } else {
+                return '';
+            }
+        }
+
+        // 2. Fallback por jerarquía: Curso -> Primer Tema (topics) -> Primera Lección (lesson)
+        $topics = get_posts( array(
+            'post_type'      => 'topics',
+            'post_parent'    => $course_id,
+            'post_status'    => 'publish',
+            'posts_per_page' => 1,
+            'orderby'        => 'menu_order',
+            'order'          => 'ASC',
+            'fields'         => 'ids',
+        ) );
+
+        if ( ! empty( $topics ) ) {
+            $lessons = get_posts( array(
+                'post_type'      => array( 'lesson', 'tutor_lesson' ),
+                'post_parent'    => intval( $topics[0] ),
+                'post_status'    => 'publish',
+                'posts_per_page' => 1,
+                'orderby'        => 'menu_order',
+                'order'          => 'ASC',
+                'fields'         => 'ids',
+            ) );
+
+            if ( ! empty( $lessons ) ) {
+                $permalink = get_permalink( intval( $lessons[0] ) );
+                if ( $permalink ) {
+                    return $permalink;
+                }
+            }
+        }
+
+        return '';
     }
 
     /**
@@ -52,6 +157,10 @@ class Sence_RCE_Content_Locker {
         $has_session = $status['has_session'] ?? false;
         if ( ! $has_session ) {
             $lock_html = $this->render_lock_overlay( $user_id, $course_id, $status );
+            // En lecciones/evaluaciones bloqueadas no enviar el contenido oculto al navegador
+            if ( in_array( $post->post_type, array( 'lesson', 'tutor_lesson', 'tutor_quiz', 'tutor_assignments' ), true ) ) {
+                return $lock_html;
+            }
             return $lock_html . '<div style="display:none;">' . $content . '</div>';
         }
 
@@ -72,6 +181,7 @@ class Sence_RCE_Content_Locker {
             return;
         }
 
+        $this->interface_rendered = true;
         echo $this->render_student_interface( get_current_user_id(), $course_id );
     }
 
@@ -90,6 +200,7 @@ class Sence_RCE_Content_Locker {
             $course_id = intval( $atts['course_id'] );
         }
 
+        $this->interface_rendered = true;
         return $this->render_student_interface( get_current_user_id(), $course_id );
     }
 
@@ -100,7 +211,7 @@ class Sence_RCE_Content_Locker {
         $run = Sence_RCE_Rut_Helper::get_user_run( $user_id );
         $status = $this->api->get_session_status( $user_id, $course_id, $run );
 
-        $feedback = $this->render_url_feedback();
+        $feedback = $this->render_url_feedback( $course_id );
 
         if ( ! $status ) {
             return $feedback . '<div class="sence-rce-card sence-rce-warning">
@@ -194,7 +305,12 @@ class Sence_RCE_Content_Locker {
             ? $server_url . '/mock/rce/Registro/IniciarSesion'
             : 'https://sistemas.sence.cl/rce/Registro/IniciarSesion';
 
-        $current_url = home_url( add_query_arg( array(), null ) );
+        // Limpiar parámetros de callbacks previos para evitar acumular errores o superar el largo máximo de SENCE (Error 202)
+        $raw_url     = home_url( add_query_arg( array(), null ) );
+        $current_url = remove_query_arg(
+            array( 'sence_success', 'sence_closed', 'sence_error', 'run', 'id_sesion', 'duracion_seg', 'note' ),
+            $raw_url
+        );
         $session_key = wp_generate_password( 32, false );
 
         // URL de retoma hacia el servidor Railway (Callbacks)
@@ -217,17 +333,20 @@ class Sence_RCE_Content_Locker {
         $cod_sence = ( $linea === 1 ) ? '' : ( $config['codigo_sence'] ?? '' );
         $codigo_curso = $config['codigo_curso'] ?? ( $test_env ? '-1' : '' );
 
-        // Registrar en log la preparación del formulario
-        Sence_RCE_Logger::log( 'info', 'Formulario de inicio de asistencia generado para alumno ' . $run, array(
-            'course_id'    => $course_id,
-            'user_id'      => $user_id,
-            'run_alumno'   => $run,
-            'rut_otec'     => $rut_otec,
-            'linea'        => $linea,
-            'cod_sence'    => $cod_sence,
-            'codigo_curso' => $codigo_curso,
-            'target'       => $target_action,
-        ) );
+        // Registrar en log la preparación del formulario (solo 1 vez por carga de página)
+        if ( ! $this->form_logged ) {
+            $this->form_logged = true;
+            Sence_RCE_Logger::log( 'info', 'Formulario de inicio de asistencia generado para alumno ' . $run, array(
+                'course_id'    => $course_id,
+                'user_id'      => $user_id,
+                'run_alumno'   => $run,
+                'rut_otec'     => $rut_otec,
+                'linea'        => $linea,
+                'cod_sence'    => $cod_sence,
+                'codigo_curso' => $codigo_curso,
+                'target'       => $target_action,
+            ) );
+        }
 
         $user_obj = get_userdata( $user_id );
         $student_name = $user_obj ? trim( $user_obj->first_name . ' ' . $user_obj->last_name ) : '';
@@ -292,7 +411,11 @@ class Sence_RCE_Content_Locker {
             ? $server_url . '/mock/rce/Registro/CerrarSesion'
             : 'https://sistemas.sence.cl/rce/Registro/CerrarSesion';
 
-        $current_url = home_url( add_query_arg( array(), null ) );
+        $raw_url     = home_url( add_query_arg( array(), null ) );
+        $current_url = remove_query_arg(
+            array( 'sence_success', 'sence_closed', 'sence_error', 'run', 'id_sesion', 'duracion_seg', 'note' ),
+            $raw_url
+        );
 
         $url_retoma = add_query_arg( array(
             'id_sesion_alumno' => $session['id_sesion_alumno'] ?? '',
@@ -367,12 +490,19 @@ class Sence_RCE_Content_Locker {
     }
 
     private function render_lock_overlay( $user_id, $course_id, $status ) {
+        // Si la tarjeta ClaveÚnica ya se renderizó en el bloque superior de la página, no repetir un 2do formulario idéntico
+        $inner_html = '';
+        if ( ! $this->interface_rendered ) {
+            $this->interface_rendered = true;
+            $inner_html = $this->render_student_interface( $user_id, $course_id );
+        }
+
         return '<div class="sence-rce-lock-container">
             <div class="sence-rce-lock-box">
                 <div class="lock-icon">🔒</div>
                 <h3>Contenido Bloqueado por Control SENCE</h3>
                 <p>Para acceder a los módulos de aprendizaje de este curso, la normativa de SENCE exige registrar tu asistencia mediante Clave Única.</p>
-                ' . $this->render_student_interface( $user_id, $course_id ) . '
+                ' . $inner_html . '
             </div>
         </div>';
     }
@@ -380,12 +510,16 @@ class Sence_RCE_Content_Locker {
     /**
      * Muestra mensajes de éxito o error al volver de SENCE
      */
-    private function render_url_feedback() {
+    private function render_url_feedback( $course_id = 0 ) {
         if ( isset( $_GET['sence_success'] ) ) {
-            Sence_RCE_Logger::log( 'info', 'Asistencia validada con éxito por SENCE', array(
-                'user_id' => get_current_user_id(),
-                'params'  => $_GET,
-            ) );
+            if ( ! $this->feedback_logged ) {
+                $this->feedback_logged = true;
+                Sence_RCE_Logger::log( 'info', 'Asistencia validada con éxito por SENCE', array(
+                    'user_id'   => get_current_user_id(),
+                    'course_id' => $course_id,
+                    'params'    => $_GET,
+                ) );
+            }
 
             return '<div class="sence-rce-notice success">
                 ✅ <strong>¡Asistencia registrada con éxito!</strong> Ya puedes continuar con tus lecciones.
@@ -393,10 +527,14 @@ class Sence_RCE_Content_Locker {
         }
 
         if ( isset( $_GET['sence_closed'] ) ) {
-            Sence_RCE_Logger::log( 'info', 'Sesión de asistencia SENCE cerrada con éxito', array(
-                'user_id' => get_current_user_id(),
-                'params'  => $_GET,
-            ) );
+            if ( ! $this->feedback_logged ) {
+                $this->feedback_logged = true;
+                Sence_RCE_Logger::log( 'info', 'Sesión de asistencia SENCE cerrada con éxito', array(
+                    'user_id'   => get_current_user_id(),
+                    'course_id' => $course_id,
+                    'params'    => $_GET,
+                ) );
+            }
 
             return '<div class="sence-rce-notice info">
                 ⏹️ <strong>Sesión SENCE cerrada correctamente.</strong> Tu tiempo de asistencia ha sido guardado.
@@ -408,12 +546,16 @@ class Sence_RCE_Content_Locker {
             $error_dict = sence_rce_get_error_codes();
             $msg = $error_dict[ $error_code ] ?? "Ocurrió un error al validar su asistencia con SENCE (Código {$error_code}).";
 
-            Sence_RCE_Logger::log( 'error', 'Error recibido en retorno desde SENCE: ' . $error_code, array(
-                'user_id'    => get_current_user_id(),
-                'error_code' => $error_code,
-                'glosa'      => $msg,
-                'params'     => $_GET,
-            ) );
+            if ( ! $this->feedback_logged ) {
+                $this->feedback_logged = true;
+                Sence_RCE_Logger::log( 'error', 'Error recibido en retorno desde SENCE: ' . $error_code, array(
+                    'user_id'    => get_current_user_id(),
+                    'course_id'  => $course_id,
+                    'error_code' => $error_code,
+                    'glosa'      => $msg,
+                    'params'     => $_GET,
+                ) );
+            }
 
             $admin_link = current_user_can( 'manage_options' )
                 ? ' <div style="margin-top:8px; font-size:12px;"><a href="' . esc_url( admin_url( 'admin.php?page=sence-rce-logs' ) ) . '" class="button button-secondary">📋 Ver Registro de Logs y Diagnóstico</a></div>'

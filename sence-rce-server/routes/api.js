@@ -60,7 +60,7 @@ router.get('/session/status', async (req, res) => {
     }
 
     if (runAlumno) {
-      sessionQuery = sessionQuery.eq('run_alumno', runAlumno);
+      sessionQuery = sessionQuery.ilike('run_alumno', runAlumno.trim());
     }
 
     const { data: sessions } = await sessionQuery.order('session_opened_at', { ascending: false }).limit(1);

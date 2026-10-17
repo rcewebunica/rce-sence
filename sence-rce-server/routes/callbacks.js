@@ -114,7 +114,7 @@ router.post('/open', async (req, res) => {
           .from('sessions')
           .select('id, session_opened_at, id_sesion_alumno')
           .eq('otec_id', otec.id)
-          .eq('run_alumno', RunAlumno)
+          .ilike('run_alumno', RunAlumno.trim())
           .eq('is_active', true);
 
         if (previousActiveSessions && previousActiveSessions.length > 0) {
@@ -159,7 +159,7 @@ router.post('/open', async (req, res) => {
         course_id: courseId,
         wp_user_id: 0, // El plugin de WP asocia la sesión al alumno logueado
         wp_site_url: wpSiteUrl,
-        run_alumno: RunAlumno || '',
+        run_alumno: (RunAlumno || '').trim().toLowerCase(),
         cod_sence: CodSence || '',
         codigo_curso: CodigoCurso || '',
         id_sesion_alumno: IdSesionAlumno,

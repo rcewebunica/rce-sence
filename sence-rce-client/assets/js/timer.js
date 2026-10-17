@@ -2,6 +2,24 @@
  * SENCE RCE Asistencia — Timer de Alumno en Vivo
  */
 document.addEventListener('DOMContentLoaded', function() {
+    // Limpiar parámetros de callback SENCE de la barra de direcciones para evitar duplicar acciones al recargar (F5)
+    if (window.history && window.history.replaceState && window.location.search) {
+        var params = new URLSearchParams(window.location.search);
+        var senceKeys = ['sence_success', 'sence_closed', 'run', 'id_sesion', 'duracion_seg', 'note'];
+        var modified = false;
+        senceKeys.forEach(function(key) {
+            if (params.has(key)) {
+                params.delete(key);
+                modified = true;
+            }
+        });
+        if (modified) {
+            var newQuery = params.toString();
+            var cleanUrl = window.location.pathname + (newQuery ? '?' + newQuery : '') + window.location.hash;
+            window.history.replaceState({}, document.title, cleanUrl);
+        }
+    }
+
     var elapsedInput = document.getElementById('sence-rce-elapsed');
     if (!elapsedInput) {
         return;

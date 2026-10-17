@@ -6,6 +6,7 @@ class Sence_RCE_Api_Client {
 
     private $server_url;
     private $api_key;
+    private $runtime_cache = array();
 
     public function __construct() {
         $this->server_url = untrailingslashit( Sence_RCE_Settings::get( 'server_url', '' ) );
@@ -22,12 +23,18 @@ class Sence_RCE_Api_Client {
 
         $transient_key = 'sence_stat_' . md5( "{$wp_user_id}_{$wp_course_id}_{$run_alumno}" );
 
-        // Si retornamos de un callback SENCE (inicio o cierre), invalidar cache para respuesta inmediata
+        // 1. Caché en memoria durante el mismo ciclo de carga de página (evita llamadas HTTP duplicadas)
+        if ( array_key_exists( $transient_key, $this->runtime_cache ) ) {
+            return $this->runtime_cache[ $transient_key ];
+        }
+
+        // 2. Si retornamos de un callback SENCE (inicio o cierre), invalidar transient una vez para respuesta inmediata
         if ( isset( $_GET['sence_success'] ) || isset( $_GET['sence_closed'] ) || isset( $_GET['sence_error'] ) ) {
             delete_transient( $transient_key );
         } else {
             $cached = get_transient( $transient_key );
             if ( false !== $cached ) {
+                $this->runtime_cache[ $transient_key ] = $cached;
                 return $cached;
             }
         }
@@ -43,11 +50,13 @@ class Sence_RCE_Api_Client {
         $response = $this->_request( '/api/session/status', 'GET', $params );
 
         if ( ! is_wp_error( $response ) && is_array( $response ) ) {
-            // Guardar en cache por 15 segundos
+            // Guardar en memoria y en transient por 15 segundos
+            $this->runtime_cache[ $transient_key ] = $response;
             set_transient( $transient_key, $response, 15 );
             return $response;
         }
 
+        $this->runtime_cache[ $transient_key ] = false;
         return false;
     }
 
