@@ -3,7 +3,7 @@
  * Plugin Name: SENCE RCE — Asistencia e-Learning (Cloud SaaS)
  * Plugin URI: https://webunica.cl
  * Description: Integración oficial con SENCE RCE mediante servidor central Railway + Supabase. Control de asistencia obligatorio para cursos Tutor LMS.
- * Version: 2.4.7
+ * Version: 2.4.8
  * Author: Webunica Chile
  * Author URI: https://webunica.cl
  * Text Domain: sence-rce
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SENCE_RCE_VERSION', '2.4.7' );
+define( 'SENCE_RCE_VERSION', '2.4.8' );
 define( 'SENCE_RCE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SENCE_RCE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -69,6 +69,67 @@ class Sence_RCE_Client {
         add_action( 'tutor_course/single/before/inner-wrap', array( $this->content_locker, 'render_sence_block' ) );
         add_action( 'tutor_lesson/single/before/content', array( $this->content_locker, 'render_sence_block_lesson' ) );
         add_shortcode( 'sence_rce', array( $this->content_locker, 'shortcode_handler' ) );
+
+        // Redirección post-login en WordPress, Tutor LMS y WooCommerce (ej: a /my-courses/)
+        add_filter( 'login_redirect', array( $this, 'custom_login_redirect' ), 99, 3 );
+        add_filter( 'tutor_login_redirect_url', array( $this, 'custom_tutor_login_redirect' ), 99, 1 );
+        add_filter( 'tutor_after_login_redirect_url', array( $this, 'custom_tutor_login_redirect' ), 99, 1 );
+        add_filter( 'woocommerce_login_redirect', array( $this, 'custom_woo_login_redirect' ), 99, 2 );
+    }
+
+    /**
+     * Resuelve la URL objetivo configurada para redirección post-login
+     */
+    public function get_login_redirect_target() {
+        $redirect_path = Sence_RCE_Settings::get( 'login_redirect_url', '/my-courses/' );
+        $redirect_path = trim( (string) $redirect_path );
+        if ( empty( $redirect_path ) ) {
+            return '';
+        }
+        if ( preg_match( '/^https?:\/\//i', $redirect_path ) ) {
+            return esc_url_raw( $redirect_path );
+        }
+        return home_url( '/' . ltrim( $redirect_path, '/' ) );
+    }
+
+    /**
+     * Redirige al usuario tras login de WordPress (wp-login.php)
+     */
+    public function custom_login_redirect( $redirect_to, $requested_redirect_to, $user ) {
+        if ( is_wp_error( $user ) || ! is_a( $user, 'WP_User' ) ) {
+            return $redirect_to;
+        }
+
+        $target = $this->get_login_redirect_target();
+        if ( empty( $target ) ) {
+            return $redirect_to;
+        }
+
+        // Si el usuario intentó acceder a una página o lección específica previa (no wp-admin ni wp-login), respetarla
+        if ( ! empty( $requested_redirect_to ) ) {
+            $clean_req = strtolower( $requested_redirect_to );
+            if ( false === strpos( $clean_req, 'wp-admin' ) && false === strpos( $clean_req, 'wp-login' ) ) {
+                return $requested_redirect_to;
+            }
+        }
+
+        return $target;
+    }
+
+    /**
+     * Redirige al usuario tras login desde formularios de Tutor LMS
+     */
+    public function custom_tutor_login_redirect( $redirect_to ) {
+        $target = $this->get_login_redirect_target();
+        return ! empty( $target ) ? $target : $redirect_to;
+    }
+
+    /**
+     * Redirige al usuario tras login desde WooCommerce (si está activo)
+     */
+    public function custom_woo_login_redirect( $redirect_to, $user ) {
+        $target = $this->get_login_redirect_target();
+        return ! empty( $target ) ? $target : $redirect_to;
     }
 
     public function enqueue_frontend_assets() {

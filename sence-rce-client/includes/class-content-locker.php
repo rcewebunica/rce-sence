@@ -305,12 +305,8 @@ class Sence_RCE_Content_Locker {
             ? $server_url . '/mock/rce/Registro/IniciarSesion'
             : 'https://sistemas.sence.cl/rce/Registro/IniciarSesion';
 
-        // Limpiar parámetros de callbacks previos para evitar acumular errores o superar el largo máximo de SENCE (Error 202)
-        $raw_url     = home_url( add_query_arg( array(), null ) );
-        $current_url = remove_query_arg(
-            array( 'sence_success', 'sence_closed', 'sence_error', 'run', 'id_sesion', 'duracion_seg', 'note' ),
-            $raw_url
-        );
+        // URL exacta de la lección/página actual donde está el alumno (preserva curso, lección y query params)
+        $current_url = $this->get_current_clean_url();
         $session_key = wp_generate_password( 32, false );
 
         // URL de retoma hacia el servidor Railway (Callbacks)
@@ -411,11 +407,7 @@ class Sence_RCE_Content_Locker {
             ? $server_url . '/mock/rce/Registro/CerrarSesion'
             : 'https://sistemas.sence.cl/rce/Registro/CerrarSesion';
 
-        $raw_url     = home_url( add_query_arg( array(), null ) );
-        $current_url = remove_query_arg(
-            array( 'sence_success', 'sence_closed', 'sence_error', 'run', 'id_sesion', 'duracion_seg', 'note' ),
-            $raw_url
-        );
+        $current_url = $this->get_current_clean_url();
 
         $url_retoma = add_query_arg( array(
             'id_sesion_alumno' => $session['id_sesion_alumno'] ?? '',
@@ -699,5 +691,37 @@ class Sence_RCE_Content_Locker {
 
         // Si no es un curso ni pertenece a un curso, NO es un curso
         return 0;
+    }
+
+    /**
+     * Obtiene la URL completa y exacta de la página o lección actual donde está el alumno,
+     * conservando la ruta completa (ej: /my-courses/.../lecciones/infografia-5/) y parámetros
+     * activos (?page_tab=overview), pero limpiando parámetros temporales de SENCE.
+     */
+    public function get_current_clean_url() {
+        $request_uri = isset( $_SERVER['REQUEST_URI'] ) ? sanitize_text_field( wp_unslash( $_SERVER['REQUEST_URI'] ) ) : '';
+
+        if ( empty( $request_uri ) || '/' === $request_uri ) {
+            global $post;
+            if ( $post && ! empty( $post->ID ) ) {
+                $raw_url = get_permalink( $post->ID );
+            } else {
+                $raw_url = home_url( '/' );
+            }
+        } else {
+            if ( preg_match( '/^https?:\/\//i', $request_uri ) ) {
+                $raw_url = $request_uri;
+            } else {
+                $raw_url = home_url( $request_uri );
+            }
+        }
+
+        // Limpiar parámetros de callbacks previos para evitar acumular errores o superar el largo máximo de SENCE (Error 202)
+        $clean_url = remove_query_arg(
+            array( 'sence_success', 'sence_closed', 'sence_error', 'run', 'id_sesion', 'duracion_seg', 'note' ),
+            $raw_url
+        );
+
+        return esc_url_raw( $clean_url );
     }
 }

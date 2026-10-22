@@ -58,6 +58,14 @@ class Sence_RCE_Settings {
             'sence-rce-settings',
             'sence_rce_server_section'
         );
+
+        add_settings_field(
+            'login_redirect_url',
+            'Redirección post-login',
+            array( $this, 'render_login_redirect_field' ),
+            'sence-rce-settings',
+            'sence_rce_server_section'
+        );
     }
 
     public function render_section_description() {
@@ -95,8 +103,15 @@ class Sence_RCE_Settings {
         $output['rut_otec']    = isset( $input['rut_otec'] ) ? sanitize_text_field( trim( $input['rut_otec'] ) ) : '';
         $output['token_sence'] = isset( $input['token_sence'] ) ? sanitize_text_field( trim( $input['token_sence'] ) ) : '';
         // Si el checkbox está marcado llega '1', si se desmarca (o el hidden input envía 0) se guarda 0
-        $output['test_env']    = ! empty( $input['test_env'] ) ? 1 : 0;
+        $output['test_env']           = ! empty( $input['test_env'] ) ? 1 : 0;
+        $output['login_redirect_url'] = isset( $input['login_redirect_url'] ) ? sanitize_text_field( trim( $input['login_redirect_url'] ) ) : '/my-courses/';
         return $output;
+    }
+
+    public function render_login_redirect_field() {
+        $val = self::get( 'login_redirect_url', '/my-courses/' );
+        echo '<input type="text" name="sence_rce_cloud_options[login_redirect_url]" value="' . esc_attr( $val ) . '" class="regular-text" placeholder="/my-courses/">';
+        echo '<p class="description">Página a la que serán redirigidos los usuarios tras ingresar su clave de WordPress o Tutor LMS (por defecto: <code>/my-courses/</code>).</p>';
     }
 
     public function render_test_env_field() {
