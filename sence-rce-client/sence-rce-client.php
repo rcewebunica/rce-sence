@@ -3,7 +3,7 @@
  * Plugin Name: SENCE RCE — Asistencia e-Learning (Cloud SaaS)
  * Plugin URI: https://webunica.cl
  * Description: Integración oficial con SENCE RCE mediante servidor central Railway + Supabase. Control de asistencia obligatorio para cursos Tutor LMS.
- * Version: 2.4.8
+ * Version: 2.4.9
  * Author: Webunica Chile
  * Author URI: https://webunica.cl
  * Text Domain: sence-rce
@@ -14,7 +14,7 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-define( 'SENCE_RCE_VERSION', '2.4.8' );
+define( 'SENCE_RCE_VERSION', '2.4.9' );
 define( 'SENCE_RCE_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
 define( 'SENCE_RCE_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 
@@ -29,12 +29,19 @@ require_once SENCE_RCE_PLUGIN_DIR . 'includes/class-admin-menu.php';
 
 class Sence_RCE_Client {
 
-    private $api;
-    private $settings;
-    private $content_locker;
-    private $admin_menu;
+    private static $instance = null;
+
+    public $api;
+    public $settings;
+    public $content_locker;
+    public $admin_menu;
+
+    public static function get_instance() {
+        return self::$instance;
+    }
 
     public function __construct() {
+        self::$instance       = $this;
         $this->settings       = new Sence_RCE_Settings();
         $this->api            = new Sence_RCE_Api_Client();
         $this->content_locker = new Sence_RCE_Content_Locker( $this->api );
@@ -81,10 +88,10 @@ class Sence_RCE_Client {
      * Resuelve la URL objetivo configurada para redirección post-login
      */
     public function get_login_redirect_target() {
-        $redirect_path = Sence_RCE_Settings::get( 'login_redirect_url', '/my-courses/' );
+        $redirect_path = Sence_RCE_Settings::get( 'login_redirect_url', '/' );
         $redirect_path = trim( (string) $redirect_path );
-        if ( empty( $redirect_path ) ) {
-            return '';
+        if ( empty( $redirect_path ) || '/' === $redirect_path ) {
+            return home_url( '/' );
         }
         if ( preg_match( '/^https?:\/\//i', $redirect_path ) ) {
             return esc_url_raw( $redirect_path );
@@ -208,4 +215,31 @@ function sence_rce_get_error_codes() {
         '312' => 'No se pudo completar la autenticación con Clave Única.',
         '313' => 'URL de Cierre de sesión incorrecta.'
     );
+}
+
+/**
+ * Helper global para renderizar el widget de asistencia SENCE en el dashboard o panel del alumno.
+ * Muestra el feedback de Clave Única (éxito/cierre/error) y el cronómetro activo en vivo.
+ */
+function sence_rce_render_student_widget( $user_id = 0, $course_id = 0 ) {
+    $instance = Sence_RCE_Client::get_instance();
+    if ( $instance && isset( $instance->content_locker ) ) {
+        return $instance->content_locker->render_dashboard_sence_card( $user_id, $course_id );
+    }
+    return '';
+}
+
+/**
+ * Helper global para consultar si un alumno tiene sesión activa en SENCE
+ */
+function sence_rce_get_student_session_status( $user_id = 0, $course_id = 0 ) {
+    $instance = Sence_RCE_Client::get_instance();
+    if ( $instance && isset( $instance->api ) ) {
+        if ( empty( $user_id ) ) {
+            $user_id = get_current_user_id();
+        }
+        $run = Sence_RCE_Rut_Helper::get_user_run( $user_id );
+        return $instance->api->get_session_status( $user_id, $course_id, $run );
+    }
+    return false;
 }

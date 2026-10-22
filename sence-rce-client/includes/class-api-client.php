@@ -40,10 +40,12 @@ class Sence_RCE_Api_Client {
         }
 
         $params = array(
-            'wp_user_id'   => $wp_user_id,
-            'wp_course_id' => $wp_course_id,
+            'wp_user_id' => $wp_user_id,
         );
-        if ( $run_alumno ) {
+        if ( ! empty( $wp_course_id ) ) {
+            $params['wp_course_id'] = intval( $wp_course_id );
+        }
+        if ( ! empty( $run_alumno ) ) {
             $params['run_alumno'] = $run_alumno;
         }
 

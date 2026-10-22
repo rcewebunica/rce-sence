@@ -17,17 +17,51 @@ router.get('/session/status', async (req, res) => {
     const wpUserId = req.query.wp_user_id ? parseInt(req.query.wp_user_id, 10) : null;
     const runAlumno = req.query.run_alumno || null;
 
-    if (!wpCourseId) {
-      return res.status(400).json({ error: 'Parámetro wp_course_id requerido' });
+    if (!wpCourseId && !runAlumno) {
+      return res.status(400).json({ error: 'Parámetro wp_course_id o run_alumno requerido' });
     }
 
-    // 1. Obtener configuración del curso
-    const { data: course } = await supabase
-      .from('courses')
+    // 1. Obtener configuración del curso (si fue especificado)
+    let course = null;
+    if (wpCourseId) {
+      const { data: foundCourse } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('otec_id', otec.id)
+        .eq('wp_course_id', wpCourseId)
+        .single();
+      course = foundCourse;
+    }
+
+    // 2. Buscar sesión activa
+    let sessionQuery = supabase
+      .from('sessions')
       .select('*')
       .eq('otec_id', otec.id)
-      .eq('wp_course_id', wpCourseId)
-      .single();
+      .eq('is_active', true);
+
+    if (course) {
+      sessionQuery = sessionQuery.eq('course_id', course.id);
+    }
+
+    if (runAlumno) {
+      sessionQuery = sessionQuery.ilike('run_alumno', runAlumno.trim());
+    }
+
+    const { data: sessions } = await sessionQuery.order('session_opened_at', { ascending: false }).limit(1);
+    const activeSession = sessions && sessions.length > 0 ? sessions[0] : null;
+
+    // Si no teníamos course especificado pero hay sesión activa, cargar su curso
+    if (!course && activeSession && activeSession.course_id) {
+      const { data: sessionCourse } = await supabase
+        .from('courses')
+        .select('*')
+        .eq('id', activeSession.course_id)
+        .single();
+      if (sessionCourse) {
+        course = sessionCourse;
+      }
+    }
 
     // Fecha actual en zona horaria de Chile (YYYY-MM-DD)
     const todayCl = new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Santiago' }).format(new Date());
@@ -47,24 +81,6 @@ router.get('/session/status', async (req, res) => {
       fecha_termino: fechaTermino,
       access_state: accessState
     };
-
-    // 2. Buscar sesión activa
-    let sessionQuery = supabase
-      .from('sessions')
-      .select('*')
-      .eq('otec_id', otec.id)
-      .eq('is_active', true);
-
-    if (course) {
-      sessionQuery = sessionQuery.eq('course_id', course.id);
-    }
-
-    if (runAlumno) {
-      sessionQuery = sessionQuery.ilike('run_alumno', runAlumno.trim());
-    }
-
-    const { data: sessions } = await sessionQuery.order('session_opened_at', { ascending: false }).limit(1);
-    const activeSession = sessions && sessions.length > 0 ? sessions[0] : null;
 
     if (activeSession) {
       const openedAt = new Date(activeSession.session_opened_at).getTime();

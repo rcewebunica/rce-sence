@@ -116,6 +116,55 @@ class Sence_RCE_Content_Locker {
     }
 
     /**
+     * Obtiene la URL de retorno de retoma para SENCE (UrlRetoma) según configuración
+     */
+    public function get_retoma_target_url( $course_id = 0 ) {
+        $mode = Sence_RCE_Settings::get( 'retoma_redirect_mode', 'connected_page' );
+        if ( 'current_lesson' === $mode ) {
+            return $this->get_current_clean_url();
+        }
+
+        // Modo 'connected_page': retornar a la página de conectado / inicio
+        $login_target = Sence_RCE_Settings::get( 'login_redirect_url', '/' );
+        $login_target = trim( (string) $login_target );
+
+        if ( empty( $login_target ) || '/' === $login_target ) {
+            $base_url = home_url( '/' );
+        } elseif ( preg_match( '/^https?:\/\//i', $login_target ) ) {
+            $base_url = esc_url_raw( $login_target );
+        } else {
+            $base_url = home_url( '/' . ltrim( $login_target, '/' ) );
+        }
+
+        if ( ! empty( $course_id ) ) {
+            $base_url = add_query_arg( 'sence_active_course', intval( $course_id ), $base_url );
+        }
+
+        return $base_url;
+    }
+
+    /**
+     * Obtiene la URL de retorno tras cerrar sesión SENCE
+     */
+    public function get_retoma_close_url( $course_id = 0 ) {
+        $mode = Sence_RCE_Settings::get( 'retoma_redirect_mode', 'connected_page' );
+        if ( 'current_lesson' === $mode ) {
+            return $this->get_current_clean_url();
+        }
+
+        $login_target = Sence_RCE_Settings::get( 'login_redirect_url', '/' );
+        $login_target = trim( (string) $login_target );
+
+        if ( empty( $login_target ) || '/' === $login_target ) {
+            return home_url( '/' );
+        } elseif ( preg_match( '/^https?:\/\//i', $login_target ) ) {
+            return esc_url_raw( $login_target );
+        } else {
+            return home_url( '/' . ltrim( $login_target, '/' ) );
+        }
+    }
+
+    /**
      * Intercepta el contenido de cursos o lecciones de Tutor LMS
      */
     public function maybe_lock_content( $content ) {
@@ -305,23 +354,23 @@ class Sence_RCE_Content_Locker {
             ? $server_url . '/mock/rce/Registro/IniciarSesion'
             : 'https://sistemas.sence.cl/rce/Registro/IniciarSesion';
 
-        // URL exacta de la lección/página actual donde está el alumno (preserva curso, lección y query params)
-        $current_url = $this->get_current_clean_url();
-        $session_key = wp_generate_password( 32, false );
+        // URL de destino de retoma según configuración (página de conectado o lección)
+        $target_retoma = $this->get_retoma_target_url( $course_id );
+        $session_key   = wp_generate_password( 32, false );
 
         // URL de retoma hacia el servidor Railway (Callbacks)
         $url_retoma = add_query_arg( array(
             'sence_course_id' => $course_id,
             'site_url'        => home_url(),
             'otec_api_key'    => $api_key,
-            'wp_retoma'       => $current_url
+            'wp_retoma'       => $target_retoma
         ), $server_url . '/callback/open' );
 
         $url_error = add_query_arg( array(
             'sence_course_id' => $course_id,
             'site_url'        => home_url(),
             'otec_api_key'    => $api_key,
-            'wp_retoma'       => $current_url
+            'wp_retoma'       => $target_retoma
         ), $server_url . '/callback/error' );
 
         $linea = intval( $config['linea_capacitacion'] ?? 3 );
@@ -393,7 +442,7 @@ class Sence_RCE_Content_Locker {
     /**
      * Formulario POST para Cierre de Sesión SENCE
      */
-    private function render_close_session_form( $user_id, $course_id, $status ) {
+    public function render_close_session_form( $user_id, $course_id, $status ) {
         $server_url = untrailingslashit( Sence_RCE_Settings::get( 'server_url', '' ) );
         $test_env   = (bool) Sence_RCE_Settings::get( 'test_env', 1 );
         $rut_otec   = str_replace( '.', '', trim( Sence_RCE_Settings::get( 'rut_otec', '' ) ) );
@@ -407,15 +456,15 @@ class Sence_RCE_Content_Locker {
             ? $server_url . '/mock/rce/Registro/CerrarSesion'
             : 'https://sistemas.sence.cl/rce/Registro/CerrarSesion';
 
-        $current_url = $this->get_current_clean_url();
+        $target_close_retoma = $this->get_retoma_close_url( $course_id );
 
         $url_retoma = add_query_arg( array(
             'id_sesion_alumno' => $session['id_sesion_alumno'] ?? '',
-            'wp_retoma'        => $current_url
+            'wp_retoma'        => $target_close_retoma
         ), $server_url . '/callback/close' );
 
         $url_error = add_query_arg( array(
-            'wp_retoma' => $current_url
+            'wp_retoma' => $target_close_retoma
         ), $server_url . '/callback/error' );
 
         $linea = intval( $config['linea_capacitacion'] ?? 3 );
@@ -464,17 +513,23 @@ class Sence_RCE_Content_Locker {
     /**
      * Tarjeta de sesión activa cuando no se requiere cierre manual
      */
-    private function render_session_active_card( $status ) {
+    public function render_session_active_card( $status ) {
         $session = $status['session'] ?? array();
         $elapsed = intval( $session['elapsed_seconds'] ?? 0 );
 
         ob_start();
         ?>
-        <div class="sence-rce-card sence-rce-session-badge">
+        <div class="sence-rce-card sence-rce-session-badge" style="margin-bottom:20px; padding:16px 20px; background:#f0fdf4; border:1px solid #bbf7d0; border-radius:10px; display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:12px;">
             <input type="hidden" id="sence-rce-elapsed" value="<?php echo esc_attr( $elapsed ); ?>">
-            <div class="sence-rce-active-row">
-                <span class="sence-rce-dot active"></span>
-                <span><strong>Asistencia SENCE Activa:</strong> <span id="sence-rce-hours">00</span>:<span id="sence-rce-minutes">00</span>:<span id="sence-rce-seconds">00</span></span>
+            <div class="sence-rce-active-row" style="display:flex; align-items:center; gap:10px;">
+                <span class="sence-rce-dot active" style="width:12px; height:12px; background:#22c55e; border-radius:50%; display:inline-block; box-shadow:0 0 0 3px rgba(34,197,94,0.25);"></span>
+                <span style="font-size:15px; color:#166534; font-weight:600;">Asistencia SENCE Activa:</span>
+                <span style="font-family:monospace, monospace; font-size:18px; font-weight:700; color:#14532d; background:#dcfce7; padding:4px 10px; border-radius:6px; letter-spacing:1px;">
+                    <span id="sence-rce-hours">00</span>:<span id="sence-rce-minutes">00</span>:<span id="sence-rce-seconds">00</span>
+                </span>
+            </div>
+            <div style="font-size:13px; color:#15803d;">
+                Tu tiempo de estudio está siendo registrado en tiempo real ante SENCE.
             </div>
         </div>
         <?php
@@ -500,9 +555,50 @@ class Sence_RCE_Content_Locker {
     }
 
     /**
+     * Muestra el bloque completo SENCE para la página de conectado o dashboard del alumno:
+     * 1. Mensaje de éxito/error/cierre tras regresar de Clave Única o SENCE
+     * 2. Cronómetro activo si tiene una sesión SENCE en curso
+     */
+    public function render_dashboard_sence_card( $user_id = 0, $course_id = 0 ) {
+        if ( empty( $user_id ) ) {
+            $user_id = get_current_user_id();
+        }
+        if ( empty( $user_id ) ) {
+            return '';
+        }
+
+        if ( empty( $course_id ) ) {
+            if ( isset( $_GET['sence_active_course'] ) ) {
+                $course_id = intval( $_GET['sence_active_course'] );
+            } elseif ( isset( $_GET['sence_course_id'] ) ) {
+                $course_id = intval( $_GET['sence_course_id'] );
+            }
+        }
+
+        $feedback = $this->render_url_feedback( $course_id );
+
+        $run = Sence_RCE_Rut_Helper::get_user_run( $user_id );
+        $status = $this->api->get_session_status( $user_id, $course_id, $run );
+
+        $session_html = '';
+        if ( $status && ! empty( $status['has_session'] ) ) {
+            $config = $status['course_config'] ?? array();
+            $solicitar_cierre = $config['solicitar_cierre'] ?? false;
+
+            if ( $solicitar_cierre ) {
+                $session_html = $this->render_close_session_form( $user_id, $course_id, $status );
+            } else {
+                $session_html = $this->render_session_active_card( $status );
+            }
+        }
+
+        return $feedback . $session_html;
+    }
+
+    /**
      * Muestra mensajes de éxito o error al volver de SENCE
      */
-    private function render_url_feedback( $course_id = 0 ) {
+    public function render_url_feedback( $course_id = 0 ) {
         if ( isset( $_GET['sence_success'] ) ) {
             if ( ! $this->feedback_logged ) {
                 $this->feedback_logged = true;

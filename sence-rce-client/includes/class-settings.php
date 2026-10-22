@@ -66,6 +66,14 @@ class Sence_RCE_Settings {
             'sence-rce-settings',
             'sence_rce_server_section'
         );
+
+        add_settings_field(
+            'retoma_redirect_mode',
+            'Retorno Clave Única SENCE (UrlRetoma)',
+            array( $this, 'render_retoma_redirect_field' ),
+            'sence-rce-settings',
+            'sence_rce_server_section'
+        );
     }
 
     public function render_section_description() {
@@ -104,14 +112,28 @@ class Sence_RCE_Settings {
         $output['token_sence'] = isset( $input['token_sence'] ) ? sanitize_text_field( trim( $input['token_sence'] ) ) : '';
         // Si el checkbox está marcado llega '1', si se desmarca (o el hidden input envía 0) se guarda 0
         $output['test_env']           = ! empty( $input['test_env'] ) ? 1 : 0;
-        $output['login_redirect_url'] = isset( $input['login_redirect_url'] ) ? sanitize_text_field( trim( $input['login_redirect_url'] ) ) : '/my-courses/';
+        $output['login_redirect_url']  = isset( $input['login_redirect_url'] ) ? sanitize_text_field( trim( $input['login_redirect_url'] ) ) : '/';
+        $output['retoma_redirect_mode'] = isset( $input['retoma_redirect_mode'] ) && in_array( $input['retoma_redirect_mode'], array( 'connected_page', 'current_lesson' ), true )
+            ? $input['retoma_redirect_mode']
+            : 'connected_page';
         return $output;
     }
 
     public function render_login_redirect_field() {
-        $val = self::get( 'login_redirect_url', '/my-courses/' );
-        echo '<input type="text" name="sence_rce_cloud_options[login_redirect_url]" value="' . esc_attr( $val ) . '" class="regular-text" placeholder="/my-courses/">';
-        echo '<p class="description">Página a la que serán redirigidos los usuarios tras ingresar su clave de WordPress o Tutor LMS (por defecto: <code>/my-courses/</code>).</p>';
+        $val = self::get( 'login_redirect_url', '/' );
+        echo '<input type="text" name="sence_rce_cloud_options[login_redirect_url]" value="' . esc_attr( $val ) . '" class="regular-text" placeholder="/">';
+        echo '<p class="description">Página a la que serán redirigidos los usuarios tras ingresar su usuario y contraseña en WordPress o Tutor LMS (ej: <code>/</code> para la página de inicio/conectado o <code>/my-courses/</code>).</p>';
+    }
+
+    public function render_retoma_redirect_field() {
+        $val = self::get( 'retoma_redirect_mode', 'connected_page' );
+        ?>
+        <select name="sence_rce_cloud_options[retoma_redirect_mode]" class="regular-text">
+            <option value="connected_page" <?php selected( 'connected_page', $val ); ?>>🏠 Página de conectado / Inicio (muestra banner de éxito, cronómetro y cursos)</option>
+            <option value="current_lesson" <?php selected( 'current_lesson', $val ); ?>>📖 Misma lección / URL donde inició la asistencia</option>
+        </select>
+        <p class="description">Define a qué página enviará el retorno oficial de SENCE (<code>UrlRetoma</code>) al alumno una vez autenticada su Clave Única.</p>
+        <?php
     }
 
     public function render_test_env_field() {
