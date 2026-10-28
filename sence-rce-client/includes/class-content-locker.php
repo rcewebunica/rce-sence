@@ -183,8 +183,8 @@ class Sence_RCE_Content_Locker {
         }
 
         // Solo intervenir si el post actual es un curso o contenido de Tutor LMS
-        $course_cpt = function_exists( 'tutor' ) && isset( tutor()->course_post_type ) ? tutor()->course_post_type : 'courses';
-        $allowed_cpts = array( $course_cpt, 'courses', 'course', 'lesson', 'tutor_lesson', 'tutor_quiz', 'tutor_assignments', 'topics' );
+        $course_cpt = function_exists( 'tutor' ) && is_object( tutor() ) && ! empty( tutor()->course_post_type ) ? tutor()->course_post_type : 'courses';
+        $allowed_cpts = array( $course_cpt, 'courses', 'course', 'tutor_course', 'lesson', 'tutor_lesson', 'tutor_quiz', 'tutor_assignments', 'topics' );
         if ( ! in_array( $post->post_type, $allowed_cpts, true ) ) {
             return $content; // Páginas normales de WordPress (Mi Perfil, Carrito, Home) no se bloquean
         }
@@ -663,12 +663,12 @@ class Sence_RCE_Content_Locker {
         }
 
         $course_cpt = 'courses';
-        if ( function_exists( 'tutor' ) && is_object( tutor() ) && isset( tutor()->course_post_type ) ) {
+        if ( function_exists( 'tutor' ) && is_object( tutor() ) && ! empty( tutor()->course_post_type ) ) {
             $course_cpt = tutor()->course_post_type;
         }
 
         // 1. Si el post actual es directamente el curso
-        if ( isset( $post->post_type ) && ( $post->post_type === $course_cpt || $post->post_type === 'courses' || $post->post_type === 'course' ) ) {
+        if ( isset( $post->post_type ) && ( $post->post_type === $course_cpt || $post->post_type === 'courses' || $post->post_type === 'course' || $post->post_type === 'tutor_course' ) ) {
             return intval( $post->ID );
         }
 

@@ -203,15 +203,34 @@ class Sence_RCE_Admin_Menu {
             }
         }
 
-        // Obtener cursos de Tutor LMS o CPT 'courses'
-        $cpt = function_exists( 'tutor' ) ? tutor()->course_post_type : 'courses';
+        // Obtener cursos de Tutor LMS (CPT 'courses') compatible con todas las versiones de PHP y Tutor LMS
+        $course_types = array( 'courses', 'course', 'tutor_course' );
+        if ( function_exists( 'tutor' ) && is_object( tutor() ) && ! empty( tutor()->course_post_type ) ) {
+            $course_types[] = tutor()->course_post_type;
+        }
+        $course_types = array_values( array_unique( array_filter( $course_types ) ) );
+
         $courses = get_posts( array(
-            'post_type'      => array( $cpt, 'course' ),
-            'post_status'    => 'publish',
-            'posts_per_page' => -1,
-            'orderby'        => 'title',
-            'order'          => 'ASC'
+            'post_type'        => $course_types,
+            'post_status'      => array( 'publish', 'private', 'draft', 'pending', 'future' ),
+            'posts_per_page'   => -1,
+            'orderby'          => 'title',
+            'order'            => 'ASC',
+            'suppress_filters' => true,
         ) );
+
+        // Respaldo directo vía SQL en caso de que algún filtro de terceros intercepte get_posts
+        if ( empty( $courses ) ) {
+            global $wpdb;
+            $in_types = "'" . implode( "','", array_map( 'esc_sql', $course_types ) ) . "'";
+            $courses = $wpdb->get_results( "
+                SELECT ID, post_title, post_status 
+                FROM {$wpdb->posts} 
+                WHERE post_type IN ({$in_types}) 
+                  AND post_status IN ('publish', 'private', 'draft', 'pending')
+                ORDER BY post_title ASC
+            " );
+        }
 
         if ( $selected_id && empty( $current_cfg ) ) {
             $current_cfg = $this->api->get_course_config( $selected_id );
@@ -232,7 +251,13 @@ class Sence_RCE_Admin_Menu {
                         <tbody>
                             <?php foreach ( $courses as $c ) : ?>
                             <tr>
-                                <td><strong><?php echo esc_html( $c->post_title ); ?></strong><br><small>ID: <?php echo $c->ID; ?></small></td>
+                                <td>
+                                    <strong><?php echo esc_html( $c->post_title ); ?></strong>
+                                    <?php if ( ! empty( $c->post_status ) && 'publish' !== $c->post_status ) : ?>
+                                        <span class="sence-badge secondary" style="font-size:10px; margin-left:4px;"><?php echo esc_html( ucfirst( $c->post_status ) ); ?></span>
+                                    <?php endif; ?>
+                                    <br><small>ID: <?php echo $c->ID; ?></small>
+                                </td>
                                 <td><a href="<?php echo admin_url( 'admin.php?page=sence-rce-courses&edit_course=' . $c->ID ); ?>" class="button button-small">Configurar SENCE</a></td>
                             </tr>
                             <?php endforeach; ?>
