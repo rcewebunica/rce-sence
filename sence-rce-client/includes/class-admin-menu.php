@@ -146,6 +146,21 @@ class Sence_RCE_Admin_Menu {
             </div>
             <?php endif; ?>
 
+            <div class="sence-rce-card" style="margin-top:20px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px; background:#f8fafc; border:1px solid #e2e8f0;">
+                <div>
+                    <h3 style="margin:0 0 4px 0; font-size:15px; color:#1e293b;">🏛️ Portales Oficiales de SENCE Chile</h3>
+                    <p style="margin:0; font-size:13px; color:#64748b;">Acceso rápido para la emisión de Declaraciones Juradas y gestión de perfiles del OTEC.</p>
+                </div>
+                <div style="display:flex; gap:10px; flex-wrap:wrap;">
+                    <a href="https://sistemas.sence.cl/gca" target="_blank" rel="noopener noreferrer" class="button button-primary">
+                        Portal GCA (Declaraciones Juradas) ↗
+                    </a>
+                    <a href="https://sistemas.sence.cl/sigeca" target="_blank" rel="noopener noreferrer" class="button button-secondary">
+                        SIGECA (Gestión OTEC) ↗
+                    </a>
+                </div>
+            </div>
+
             <?php $this->render_footer_brand(); ?>
         </div>
         <?php
@@ -237,7 +252,17 @@ class Sence_RCE_Admin_Menu {
         }
         ?>
         <div class="wrap sence-rce-wrap">
-            <h1>Configuración SENCE por Curso <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; margin-bottom:15px;">
+                <h1 style="margin:0;">Configuración SENCE por Curso <span class="sence-badge secondary" style="font-size:12px; vertical-align:middle; margin-left:8px;">v<?php echo esc_html( SENCE_RCE_VERSION ); ?></span></h1>
+                <div style="display:flex; gap:8px; flex-wrap:wrap;">
+                    <a href="https://sistemas.sence.cl/gca" target="_blank" rel="noopener noreferrer" class="button button-primary">
+                        🏛️ Portal GCA SENCE (Declaraciones Juradas) ↗
+                    </a>
+                    <a href="https://sistemas.sence.cl/sigeca" target="_blank" rel="noopener noreferrer" class="button button-secondary">
+                        📋 SIGECA SENCE ↗
+                    </a>
+                </div>
+            </div>
             <div class="sence-rce-two-col">
                 <div class="sence-rce-card">
                     <h3>Cursos en tu Plataforma (<?php echo count( $courses ); ?>)</h3>
@@ -268,6 +293,40 @@ class Sence_RCE_Admin_Menu {
                 <?php if ( $selected_id ) : ?>
                 <div class="sence-rce-card">
                     <h3>Configurar: <?php echo esc_html( get_the_title( $selected_id ) ); ?></h3>
+
+                    <?php
+                    // Alertas informativas basadas en normativa SENCE (Manual GCA 2026)
+                    $f_inicio  = $current_cfg['fecha_inicio'] ?? '';
+                    $f_termino = $current_cfg['fecha_termino'] ?? '';
+                    $today_cl  = current_time( 'Y-m-d' );
+
+                    // 1. Alerta de curso finalizado (Listo para trámite de Declaración Jurada en GCA)
+                    if ( ! empty( $f_termino ) && $today_cl > $f_termino ) :
+                    ?>
+                        <div style="background:#e7f7ed; border-left:4px solid #00a32a; padding:12px 14px; margin-bottom:16px; border-radius:4px; font-size:13px; color:#155724; line-height:1.5;">
+                            <strong>🎓 Curso Finalizado — Trámite GCA Disponible:</strong> La fecha de término informada (<?php echo esc_html( date_i18n( 'd-m-Y', strtotime( $f_termino ) ) ); ?>) ya se cumplió. Según la normativa SENCE, el OTEC ya puede ingresar al <a href="https://sistemas.sence.cl/gca" target="_blank" rel="noopener" style="color:#0f5132; text-decoration:underline; font-weight:600;">Portal GCA</a> para emitir la <strong>Declaración Jurada del Ejecutor</strong> y permitir que los participantes firmen la suya.
+                        </div>
+                    <?php endif; ?>
+
+                    <?php
+                    // 2. Alerta de curso que cruza de año (Acción Parcial y Acción Complementaria)
+                    if ( ! empty( $f_inicio ) && ! empty( $f_termino ) ) :
+                        $y_ini = substr( $f_inicio, 0, 4 );
+                        $y_ter = substr( $f_termino, 0, 4 );
+                        if ( $y_ini !== $y_ter ) :
+                    ?>
+                        <div style="background:#fff8e5; border-left:4px solid #dba617; padding:12px 14px; margin-bottom:16px; border-radius:4px; font-size:13px; color:#614700; line-height:1.5;">
+                            <strong>📅 Curso Bianual (Acción Parcial / Complementaria SENCE):</strong> Este curso inicia en <strong><?php echo esc_html( $y_ini ); ?></strong> y finaliza en <strong><?php echo esc_html( $y_ter ); ?></strong>. Recuerde que según el Manual GCA de SENCE:
+                            <ul style="margin:6px 0 0 18px; list-style-type:disc; font-size:12px;">
+                                <li>En GCA deberá emitir primero la <strong>Acción Parcial</strong> (horas ejecutadas hasta el 31 de diciembre de <?php echo esc_html( $y_ini ); ?>).</li>
+                                <li>Para la <strong>Acción Complementaria</strong> (año <?php echo esc_html( $y_ter ); ?>), <em>cada alumno debe registrar obligatoriamente al menos una sesión de asistencia durante el segundo año</em> para poder emitir su Declaración Jurada.</li>
+                            </ul>
+                        </div>
+                    <?php 
+                        endif;
+                    endif; 
+                    ?>
+
                     <form method="POST" action="">
                         <?php wp_nonce_field( 'sence_rce_course_nonce' ); ?>
                         <input type="hidden" name="sence_rce_save_course" value="1">
